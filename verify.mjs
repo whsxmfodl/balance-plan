@@ -1,0 +1,28 @@
+import assert from 'node:assert/strict';
+import { makePlan } from './planner.mjs';
+import { assessMeal } from './meal.mjs';
+
+const base = {age:30,height:170,weight:75,fat:28,muscle:28,targetWeight:70,targetFat:24,targetMuscle:29,days:3,minutes:40,budget:5,modes:['gym','running'],risk:false};
+const normal = makePlan(base);
+assert.equal(normal.status,'ok');
+assert.equal(normal.sessions.length,3);
+assert.equal(normal.total,120);
+assert.match(normal.timeline.title,/주/);
+assert.match(normal.budgetNote,/이용료/);
+assert.equal(makePlan({...base,modes:[]}).status,'error');
+assert.equal(makePlan({...base,targetWeight:50}).status,'caution');
+assert.equal(makePlan({...base,targetFat:10}).status,'caution');
+assert.equal(makePlan({...base,risk:true}).status,'caution');
+assert.equal(makePlan({...base,days:7,minutes:120}).status,'caution');
+assert.equal(makePlan({...base,budget:0,modes:['gym']}).modes[0],'bodyweight');
+assert.equal(makePlan({...base,weight:70,targetWeight:70}).direction,'maintain');
+assert.equal(makePlan({...base,weight:70,targetWeight:72}).direction,'gain');
+const unknown = makePlan({...base,fat:'',muscle:'',targetFat:'',targetMuscle:''});
+assert.equal(unknown.status,'ok');
+assert.match(unknown.targetNote,/입력하지 않아 비교하지 않습니다/);
+assert.equal(makePlan({...base,fat:'',muscle:'',targetFat:24,targetMuscle:''}).status,'ok');
+assert.match(makePlan({...base,modes:['bodyweight'],pushups:'none'}).sessions[0].detail,/벽 푸시업/);
+assert.match(makePlan({...base,modes:['bodyweight'],pushups:'many'}).sessions[0].detail,/바닥 푸시업/);
+assert.match(assessMeal({vegetable:true,protein:true,grain:true,sweetDrink:false}).title,/고르게/);
+assert.match(assessMeal({vegetable:false,protein:false,grain:false,sweetDrink:false}).title,/선택/);
+console.log('핵심 계획, 안전 분기, 예산 대안, 선택 입력, 식사 체크: 통과');
