@@ -188,6 +188,25 @@ select { padding-right:24px }
 .meal-panel { margin-top:42px; padding:32px; border:1px solid var(--line); border-radius:12px; background:#fff }
 .meal-panel h2 { font-size:25px }
 .soft-badge { font-size:13px; color:#705231 }
+.day-meal-builder { margin:28px 0 32px; padding:27px 0 30px; border-top:1px solid var(--line); border-bottom:1px solid var(--line) }
+.day-meal-heading { display:flex; justify-content:space-between; align-items:start; gap:18px }
+.day-meal-heading h3 { font-size:21px }
+.day-meal-heading p { margin-top:8px; font-size:14px; color:var(--muted) }
+.day-meal-heading>span { flex-shrink:0; font-size:13px; color:var(--muted) }
+.day-meal-controls { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin:22px 0 }
+.day-meal-controls label { min-width:0; font-size:13px; font-weight:650 }
+.day-meal-controls select { width:100%; margin-top:8px; font-size:14px }
+.day-meal-intro { margin-bottom:17px; font-size:14px; color:var(--muted) }
+.day-meal-rows { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:22px }
+.day-meal-row { min-width:0; padding-top:16px; border-top:2px solid var(--line) }
+.day-meal-row strong { font-size:16px }
+.day-meal-row small { display:block; margin-top:2px; color:var(--muted); font-size:12px }
+.day-meal-row p { margin:12px 0 7px; font-size:15px; font-weight:600; line-height:1.5 }
+.day-meal-row span { font-size:13px; color:var(--muted) }
+.day-meal-action { margin-top:22px; padding:18px 20px; border-radius:8px; background:var(--soft) }
+.day-meal-action strong { display:block; font-size:16px }
+.day-meal-action p { margin-top:7px; font-size:14px }
+.day-meal-note { margin-top:16px; font-size:13px; color:var(--muted) }
 .meal-layout { display:grid; grid-template-columns:1fr 1fr; gap:48px }
 .meal-layout>div { min-width:0 }
 .segmented { display:flex; border-bottom:1px solid var(--line); margin-bottom:24px; gap:18px }
@@ -213,6 +232,10 @@ select { padding-right:24px }
 #meal-feedback:not(:empty) { padding:20px; margin-top:20px; background:var(--soft); border-radius:8px; font-size:14px }
 #meal-feedback ul { padding-left:19px }
 #meal-feedback li { margin:9px 0 }
+.meal-next { margin-top:16px; padding-top:15px; border-top:1px solid var(--line) }
+.meal-next strong { font-size:15px }
+.meal-next p { margin:6px 0; font-size:15px }
+.meal-next small { color:var(--muted); font-size:13px }
 #meal-feedback p { font-size:13px; color:var(--muted) }
 .about { margin-top:42px; border-top:1px solid var(--line) }
 .about>details { padding:20px 0; border-bottom:1px solid var(--line) }
@@ -230,6 +253,7 @@ footer { display:flex; justify-content:space-between; gap:20px; color:var(--mute
   .input-panel { padding:24px }
   .meal-layout { gap:28px }
   .meal-review { padding-left:25px }
+  .day-meal-controls { grid-template-columns:repeat(2,minmax(0,1fr)) }
 }
 @media(max-width:650px) {
   .topbar { display:grid; grid-template-columns:1fr auto; padding:12px 20px 0; gap:4px 10px }
@@ -284,6 +308,11 @@ footer { display:flex; justify-content:space-between; gap:20px; color:var(--mute
   .meal-panel { padding:24px 18px; margin-top:30px }
   .meal-panel h2 { font-size:23px }
   .meal-panel .soft-badge { display:none }
+  .day-meal-builder { margin:22px 0 27px; padding:23px 0 26px }
+  .day-meal-heading>span { display:none }
+  .day-meal-heading h3 { font-size:19px }
+  .day-meal-rows { grid-template-columns:1fr; gap:13px }
+  .day-meal-row { padding-top:12px }
   .meal-layout { grid-template-columns:1fr; gap:32px }
   .meal-review { padding:26px 0 0; border-left:0; border-top:1px solid var(--line) }
   .meal-review h3 { font-size:18px }

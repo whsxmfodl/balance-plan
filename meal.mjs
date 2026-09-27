@@ -1,5 +1,39 @@
 import { PROTEINS } from './catalog.mjs';
 
+const places = {home:'집',out:'외식·학식',store:'편의점'};
+const habitActions = {
+  balance:{title:'한 끼의 구성을 먼저 정해요',detail:'주식·먹을 수 있는 단백질 식품·채소나 과일을 함께 고를 수 있는 한 끼를 정해 보세요. 모든 끼니를 완벽히 맞출 필요는 없어요.'},
+  drink:{title:'마시는 것 한 번을 바꿔요',detail:'평소 단 음료를 마시는 자리 한 번에서 물이나 무가당 음료를 골라 보세요. 단 음료를 마시지 않는다면 다른 실천을 고르세요.'},
+  snack:{title:'자주 먹는 간식의 상황을 살펴요',detail:'간식이 필요한 시간과 배고픔을 살펴보고, 필요하다면 과일이나 먹을 수 있는 간식을 준비해요. 끼니를 굶어 간식을 억지로 줄이지는 마세요.'},
+  portion:{title:'외식·포장 음식의 양을 살펴요',detail:'주문하거나 담을 때 제공량을 확인하고, 배가 부르면 남겨 두는 선택도 가능해요. 허기를 참고 정해진 양으로 줄이라는 뜻은 아니에요.'},
+  regular:{title:'바쁜 날 먹을 수 있는 조합을 준비해요',detail:'식사 시간이 흔들리는 날을 위해 주식·먹을 수 있는 단백질 식품·채소나 과일을 마련해 두세요. 한 끼를 놓쳤다고 다음 끼니를 제한하지 마세요.'}
+};
+
+export function dayMealPlan(profile={},settings={}) {
+  if(profile.risk)return {status:'caution',message:'건강상 확인이 필요한 경우에는 이미 안내받은 식사 계획을 우선해 주세요.'};
+  const {morning='home',midday='out',evening='home',habit='balance'}=settings;
+  const choices=[morning,midday,evening];
+  if(choices.some(place=>!Object.hasOwn(places,place))||!Object.hasOwn(habitActions,habit)) return {status:'error',message:'식사 상황을 다시 골라 주세요.'};
+  const exclusions=new Set(profile.exclusions||[]);
+  const allowed=PROTEINS.filter(item=>(profile.diet!=='plant'||item.plant)&&!item.tags.some(tag=>exclusions.has(tag)));
+  if(!allowed.length)return {status:'caution',message:'선택한 식품 제한에서 안전하게 제시할 단백질 예시가 없어요. 제한을 풀어 임의로 추천하지 않으며, 먹을 수 있는 대안을 영양 전문가와 확인해 주세요.'};
+  const slots=['아침','점심','저녁'];
+  const homeDish={'두부·콩':'두부 구이','달걀':'달걀찜','닭고기':'닭고기 구이','생선':'생선구이','렌틸콩·병아리콩':'렌틸콩·병아리콩 요리'};
+  const meals=choices.map((place,index)=>{
+    const protein=allowed[index%allowed.length].name;
+    const menu=place==='home'
+      ? `${index===0?'밥 또는 감자':'밥'} + ${homeDish[protein]||protein} + 채소나 과일`
+      : place==='out' ? `백반·학식에서 밥 + 먹을 수 있는 단백질 반찬 + 채소 반찬`
+      : `즉석밥 또는 고구마 + 원재료를 확인한 ${protein} 제품 + 채소나 과일`;
+    const step=place==='home' ? '집에 있는 재료로 바꿔도 돼요.'
+      : place==='out' ? `${protein}도 예시예요. 실제 메뉴에 없다면 다른 먹을 수 있는 반찬을 골라요.`
+      : '제품의 원재료와 1회 제공량을 확인해요.';
+    return {slot:slots[index],place:places[place],menu,step};
+  });
+  const losing=profile.goal==='loss'||(!['muscle','recompose'].includes(profile.goal)&&profile.targetWeight!==null&&profile.targetWeight!==undefined&&String(profile.targetWeight).trim()!==''&&Number(profile.targetWeight)<Number(profile.weight));
+  return {status:'ok',intro:losing?'체중을 줄이려면 먹고 마시는 양에도 지속 가능한 변화가 필요해요. 이 초안은 개인의 적정량을 계산하지 않으니 이번 주 바꾸기 쉬운 행동 하나를 골라 보세요.':'하루 전체를 똑같이 먹을 필요는 없어요. 상황에 맞춰 바꿔 보세요.',meals,action:habitActions[habit],note:'메뉴는 구성 예시예요. 분량·열량·가격과 실제 알레르기 안전을 계산하지 않아요. 식품 제한, 소스·가공품·교차접촉은 직접 확인해 주세요. 오늘의 식사 선택은 기기에 저장하지 않아요.'};
+}
+
 export function mealOptions(profile,context='home',variant=0) {
   const exclusions = new Set(profile.exclusions || []);
   const allowed = PROTEINS.filter(item => (profile.diet !== 'plant' || item.plant) && !item.tags.some(tag => exclusions.has(tag)));

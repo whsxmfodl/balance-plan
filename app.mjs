@@ -1,5 +1,5 @@
 import { makePlan, makeSession, dateKey, estimateTimeline } from './planner.mjs';
-import { mealOptions, assessMeal } from './meal.mjs';
+import { mealOptions, assessMeal, dayMealPlan } from './meal.mjs';
 import { SOURCES, EXCLUSION_LABELS, RULES } from './catalog.mjs';
 import { checkSchedule, moveSession } from './schedule.mjs';
 import { STORAGE_KEY, packState, unpackState } from './storage.mjs';
@@ -169,23 +169,37 @@ function persist() {
 function persistIfEnabled() { if (remember && !example) persist(); }
 
 function mealProfile() { return plan?.status==='ok' ? plan.p : input(); }
+function todayMealSettings() { return {morning:$('#meal-morning').value,midday:$('#meal-midday').value,evening:$('#meal-evening').value,habit:$('#meal-habit').value}; }
+function renderDayMeal(profile) {
+  const target=$('#day-meal-plan');
+  if(profile.risk||plan?.status==='caution') { target.innerHTML='<p class="day-meal-note">건강상 확인이 필요한 경우에는 이미 안내받은 식사 계획을 우선해 주세요.</p>'; return; }
+  const result=dayMealPlan(profile,todayMealSettings());
+  if(result.status!=='ok') { target.innerHTML=`<p class="day-meal-note">${escape(result.message)}</p>`; return; }
+  target.innerHTML=`<p class="day-meal-intro">${escape(result.intro)}</p><div class="day-meal-rows">${result.meals.map(m=>`<div class="day-meal-row"><strong>${escape(m.slot)}</strong><small>${escape(m.place)}</small><p>${escape(m.menu)}</p><span>${escape(m.step)}</span></div>`).join('')}</div><div class="day-meal-action"><strong>이번 주의 한 가지 · ${escape(result.action.title)}</strong><p>${escape(result.action.detail)}</p></div><p class="day-meal-note">${escape(result.note)}</p>`;
+}
 function renderMeal() {
   const profile=mealProfile();
+  renderDayMeal(profile);
   if (profile.risk || plan?.status==='caution') { $('#meal-suggestion').innerHTML='<p>건강상 확인이 필요한 경우에는 일반 식사 예시를 적용하기 전에 이미 안내받은 식사 계획을 우선해 주세요.</p>'; return; }
   const meal=mealOptions(profile,context,variant);
   $('#meal-suggestion').innerHTML=`<h3>${escape(meal.title)}</h3><p>${escape(meal.focus)}</p><ul class="food-parts">${meal.parts.map(p=>`<li>${escape(p)}</li>`).join('')}</ul>${meal.canSwap ? '<button type="button" id="swap-food" class="outline-button">다른 단백질 식품으로 바꾸기</button>' : ''}<p>${escape(meal.tip)}</p><details class="fold"><summary>피할 식품과 분량 안내</summary><p>${escape(meal.caution)}</p><p>구성 예시이며 개인별 열량·영양소 처방이 아니에요. 매 끼니 이 메뉴를 맞출 필요는 없어요.</p></details>`;
 }
+document.querySelectorAll('#meal-morning,#meal-midday,#meal-evening,#meal-habit').forEach(select=>select.addEventListener('change',()=>{renderDayMeal(mealProfile()); $('#meal-feedback').textContent='';}));
 document.querySelectorAll('[data-context]').forEach(button=>button.addEventListener('click',()=>{
   context=button.dataset.context; variant=0;
   document.querySelectorAll('[data-context]').forEach(b=>b.setAttribute('aria-pressed',String(b===button))); renderMeal();
 }));
 $('#meal-suggestion').addEventListener('click',e=>{if(e.target.closest('#swap-food')){variant++;renderMeal();$('#swap-food')?.focus();}});
+$('#meal-form').addEventListener('input',()=>{$('#meal-feedback').textContent='';});
 $('#meal-form').addEventListener('submit',e=>{
   e.preventDefault();
   if (mealProfile().risk || plan?.status==='caution') { $('#meal-feedback').textContent='현재 상태에 맞는 식사 계획은 의료진·영양 전문가의 안내를 우선해 주세요.'; return; }
   const data=new FormData(e.currentTarget);
   const result=assessMeal({...Object.fromEntries(['vegetable','protein','grain','sweetDrink'].map(k=>[k,data.has(k)])),amount:data.get('amount')},mealProfile());
-  $('#meal-feedback').innerHTML=`<strong>${escape(result.title)}</strong><ul>${result.actions.map(a=>`<li>${escape(a)}</li>`).join('')}</ul><p>${escape(result.detail)}</p>`;
+  const day=dayMealPlan(mealProfile(),todayMealSettings());
+  const slot=data.get('mealSlot'),index={morning:1,midday:2,evening:0}[slot];
+  const next=result.actions.length&&day.status==='ok'&&index!==undefined?day.meals[index]:null;
+  $('#meal-feedback').innerHTML=`<strong>${escape(result.title)}</strong><ul>${result.actions.map(a=>`<li>${escape(a)}</li>`).join('')}</ul><p>${escape(result.detail)}</p>${next?`<div class="meal-next"><strong>${slot==='evening'?'내일 아침':`다음 ${next.slot}`}에 고를 수 있는 조합</strong><p>${escape(next.menu)}</p><small>${escape(next.step)}</small></div>`:''}`;
 });
 
 let photoUrl;
@@ -209,6 +223,7 @@ $('#clear-all').addEventListener('click',()=>{
   remember=false; plan=null; example=false; completed.clear(); shortened.clear(); moves={}; lastSignature='';startDate=dateKey(new Date());
   $('#profile-editor').open=true;
   form.reset(); form.querySelectorAll('[aria-invalid]').forEach(e=>e.removeAttribute('aria-invalid')); $('#meal-form').reset(); clearPhoto(); syncOptions(); variant=0;
+  $('#meal-morning').value='home'; $('#meal-midday').value='out'; $('#meal-evening').value='home'; $('#meal-habit').value='balance';
   content.innerHTML=initialContent; $('#result-tag').textContent='준비 중'; $('#form-error').hidden=true; $('#restore-message').hidden=true; $('#meal-feedback').textContent=''; renderMeal();
   $('#clear-message').textContent=removed ? '입력·사진·기기 저장 정보를 모두 지웠어요.' : '현재 입력과 사진은 지웠지만 저장소 삭제는 확인하지 못했어요. 브라우저의 사이트 데이터 설정에서 삭제해 주세요.';
 });

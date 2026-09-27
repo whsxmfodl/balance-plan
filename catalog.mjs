@@ -8,6 +8,9 @@ export const SOURCES = [
   { title:'CDC · 유산소와 근력', url:'https://www.cdc.gov/physical-activity-basics/adding-adults/what-counts.html', detail:'중강도 유산소 주 150분, 주요 근육군의 근력 주 2일 이상. 8~12회는 일반 예시이며 시작 횟수는 능력에 맞춥니다.' },
   { title:'NIDDK · 운동 시작과 회복', url:'https://www.niddk.nih.gov/health-information/weight-management/staying-active-at-any-size', detail:'짧게 시작하고 점진적으로 늘리기. 같은 근육의 근력 운동을 연속된 날에 배치하지 않기.' },
   { title:'WHO · 건강한 식사', url:'https://www.who.int/news-room/fact-sheets/detail/healthy-diet', detail:'채소·과일·콩류·통곡물과 다양한 단백질 식품을 포함하고 당류·나트륨 섭취 살피기.' },
+  { title:'CDC · 체중 관리의 식사와 활동', url:'https://www.cdc.gov/healthy-weight-growth/physical-activity/', detail:'체중 변화에는 먹고 마시는 것과 신체활동이 함께 작용합니다. 90% 같은 고정 기여 비율은 사용하지 않으며 운동의 독립적인 건강 효과와 유지 역할도 설명합니다.' },
+  { title:'NIDDK · 안전한 체중 관리 계획', url:'https://www.niddk.nih.gov/health-information/weight-management/choosing-a-safe-successful-weight-loss-program', detail:'지속할 수 있는 식사 선택, 활동, 장벽을 다루는 구체적 실천과 경과 확인을 권고합니다. 이 사이트의 하루 메뉴는 개인 영양 처방이나 효과가 검증된 치료 프로그램은 아닙니다.' },
+  { title:'NIDDK · 음식 분량 이해하기', url:'https://www.niddk.nih.gov/health-information/weight-management/just-enough-food-portions', detail:'메뉴와 포장 식품의 제공량을 살피는 방법을 참고했습니다. 개인의 적정 분량·열량을 계산한 것은 아닙니다.' },
   { title:'NIDDK · 체중 계획', url:'https://www.niddk.nih.gov/health-information/weight-management/body-weight-planner', detail:'개인별 체중 계획에는 식사와 활동량이 함께 필요합니다. 이 사이트는 해당 예측 모델을 구현하지 않았습니다.' },
   { title:'푸시업 연구 · 적용 범위', url:'https://pubmed.ncbi.nlm.nih.gov/30363033/', detail:'대학생 남성 31명의 상대 근력 관련 연구. 체성분 추정이나 이 사이트의 난이도 구간을 검증한 연구는 아닙니다.' },
   { title:'사진 체성분 연구 · 한계', url:'https://pubmed.ncbi.nlm.nih.gov/31334579/', detail:'특정 2D·3D 도구의 오차 연구이며 모든 최신 도구를 대표하지 않습니다. 이 사이트에는 신체 사진 측정 모델이 없습니다.' }
