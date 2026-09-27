@@ -30,8 +30,23 @@ export function dayMealPlan(profile={},settings={}) {
       : '제품의 원재료와 1회 제공량을 확인해요.';
     return {slot:slots[index],place:places[place],menu,step};
   });
+  const shopping=[];
+  const add=(label)=>{if(!shopping.includes(label))shopping.push(label);};
+  choices.forEach((place,index)=>{
+    if(place==='out')return;
+    const protein=allowed[index%allowed.length].name;
+    if(place==='home') {
+      add('밥·감자 중 필요한 주식');
+      add(protein);
+      add('채소 또는 과일');
+    } else {
+      add('즉석밥 또는 고구마');
+      add(`원재료 확인이 필요한 ${protein} 제품`);
+      add('샐러드 또는 과일');
+    }
+  });
   const losing=profile.goal==='loss'||(!['muscle','recompose'].includes(profile.goal)&&profile.targetWeight!==null&&profile.targetWeight!==undefined&&String(profile.targetWeight).trim()!==''&&Number(profile.targetWeight)<Number(profile.weight));
-  return {status:'ok',intro:losing?'체중을 줄이려면 먹고 마시는 양에도 지속 가능한 변화가 필요해요. 이 초안은 개인의 적정량을 계산하지 않으니 이번 주 바꾸기 쉬운 행동 하나를 골라 보세요.':'하루 전체를 똑같이 먹을 필요는 없어요. 상황에 맞춰 바꿔 보세요.',meals,action:habitActions[habit],note:'메뉴는 구성 예시예요. 분량·열량·가격과 실제 알레르기 안전을 계산하지 않아요. 식품 제한, 소스·가공품·교차접촉은 직접 확인해 주세요. 오늘의 식사 선택은 기기에 저장하지 않아요.'};
+  return {status:'ok',intro:losing?'체중을 줄이려면 먹고 마시는 양에도 지속 가능한 변화가 필요해요. 이 초안은 개인의 적정량을 계산하지 않으니 이번 주 바꾸기 쉬운 행동 하나를 골라 보세요.':'하루 전체를 똑같이 먹을 필요는 없어요. 상황에 맞춰 바꿔 보세요.',meals,shopping,action:habitActions[habit],note:'메뉴는 구성 예시예요. 분량·열량·가격과 실제 알레르기 안전을 계산하지 않아요. 식품 제한, 소스·가공품·교차접촉은 직접 확인해 주세요. 오늘의 식사 선택은 기기에 저장하지 않아요.'};
 }
 
 export function mealOptions(profile,context='home',variant=0) {
