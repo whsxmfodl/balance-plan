@@ -1,42 +1,187 @@
-import { makePlan } from './planner.mjs';
-import { assessMeal } from './meal.mjs';
+import { makePlan, makeSession, dateKey, estimateTimeline } from './planner.mjs';
+import { mealOptions, assessMeal } from './meal.mjs';
+import { SOURCES, EXCLUSION_LABELS, RULES } from './catalog.mjs';
+import { STORAGE_KEY, packState, unpackState } from './storage.mjs';
 
-const form = document.querySelector('#planner-form');
-const content = document.querySelector('#result-content');
-const error = document.querySelector('#form-error');
-const tag = document.querySelector('.result-tag');
+const $ = selector => document.querySelector(selector);
+const form = $('#planner-form'), content = $('#result-content');
+const initialContent = content.innerHTML;
+const escape = value => String(value).replace(/[&<>"']/g,c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let plan = null, example = false, remember = false, context = 'home', variant = 0;
+let completed = new Set(), shortened = new Set(), startDate = dateKey(new Date()), lastSignature = '';
+const shortDate = key => new Date(`${key}T12:00:00`).toLocaleDateString('ko-KR',{month:'numeric',day:'numeric',weekday:'short'});
+const currentSessions = () => plan.sessions.map(s => shortened.has(s.date) ? {...makeSession(s.mode,plan.p,s.day,true),date:s.date} : s);
 
-function escapeHtml(value) { return String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-function getInput() { const data = new FormData(form); return {...Object.fromEntries(data.entries()), modes:data.getAll('modes'), risk:data.has('risk')}; }
-function render(plan, example=false) {
-  error.hidden = true;
-  tag.textContent = example ? '예시 입력' : plan.status === 'ok' ? '맞춤 제안' : '안전 확인';
-  if (plan.status === 'error') { error.textContent=plan.message; error.hidden=false; content.innerHTML='<div class="empty-state">입력값을 확인하면 계획을 볼 수 있습니다.</div>'; return; }
-  if (plan.status === 'caution') { content.innerHTML=`<div class="caution"><span class="micro">안전 확인이 먼저예요</span><h3>${escapeHtml(plan.reason)}</h3><p>${escapeHtml(plan.message)}</p></div><p class="small-note">일반적인 신체활동은 개인의 상태에 맞춰 조정해야 합니다. 통증이 생기면 운동을 멈추세요.</p>`; return; }
-  content.innerHTML=`<div class="summary-card"><p class="micro">체중 목표 기간 · 계산 예시</p><strong>${escapeHtml(plan.timeline.title)}</strong><p>${escapeHtml(plan.timeline.detail)}</p></div>
-    <div class="metric-row"><div><span>주간 운동</span><strong>${plan.p.days}일 · ${plan.total}분</strong></div><div><span>추천 방식</span><strong>${escapeHtml(plan.modes.map(m=>({gym:'헬스',pilates:'필라테스',running:'러닝',hiking:'등산',bodyweight:'맨몸운동'}[m])).join(' + '))}</strong></div></div>
-    ${plan.budgetNote ? `<p class="budget-note">${escapeHtml(plan.budgetNote)}</p>` : ''}
-    <h3 class="result-section-title">운동 일정</h3><div class="session-list">${plan.sessions.map(s=>`<article class="session"><span class="day">DAY ${s.day}</span><div><h4>${escapeHtml(s.title)} <span>${escapeHtml(s.mode)}</span></h4><p>${escapeHtml(s.detail)}</p></div></article>`).join('')}</div>
-    <p class="activity-note">${escapeHtml(plan.activityNote)} ${escapeHtml(plan.pushupNote)}</p>
-    <h3 class="result-section-title">식사 방향</h3><p class="meal-text">${escapeHtml(plan.meal)}</p><div class="meal-examples"><div><span>아침</span>오트밀 또는 밥 + 달걀·두부 + 과일</div><div><span>점심</span>밥 + 채소 반찬 + 생선·콩·고기 중 하나</div><div><span>저녁</span>밥·통곡물 + 채소 + 단백질 식품</div></div>
-    <div class="uncertainty"><h3>기간을 읽을 때</h3><p>${escapeHtml(plan.targetNote)}</p><p>체중은 수분·측정 시각·약물·질환·생활 변화에 따라 달라집니다. 이 범위는 보장이나 날짜 약속이 아닙니다. 2~4주 추세와 컨디션을 보며 조정하세요.</p></div>`;
+$('#exclusions').innerHTML = Object.entries(EXCLUSION_LABELS).map(([value,label]) => `<label><input type="checkbox" name="exclusions" value="${value}">${label}</label>`).join('');
+$('#source-list').innerHTML = SOURCES.map(s => `<div class="source-item"><a href="${escape(s.url)}" target="_blank" rel="noopener noreferrer">${escape(s.title)}</a><p>${escape(s.detail)}</p></div>`).join('');
+
+function input() {
+  const data = new FormData(form);
+  return {...Object.fromEntries(data),modes:data.getAll('modes'),exclusions:data.getAll('exclusions'),hasGym:data.has('hasGym'),risk:data.get('riskAnswer')==='yes'};
 }
-form.addEventListener('submit', e => { e.preventDefault(); const plan=makePlan(getInput()); render(plan); if (window.innerWidth < 960) document.querySelector('#result').scrollIntoView({behavior:'smooth',block:'start'}); });
-render(makePlan(getInput()), true);
+function fill(profile) {
+  for (const element of form.elements) {
+    if (!element.name) continue;
+    if (element.name==='riskAnswer') { element.value = profile.risk ? 'yes' : 'no'; continue; }
+    if (element.type==='checkbox') element.checked = Array.isArray(profile[element.name]) ? profile[element.name].includes(element.value) : profile[element.name]===true;
+    else if (element.type==='radio') element.checked = element.value===profile[element.name];
+    else element.value = profile[element.name] ?? '';
+  }
+  syncOptions();
+}
+function syncOptions() {
+  const data = input();
+  $('#gym-options').hidden = !data.modes.includes('gym');
+  form.elements.namedItem('facilityCost').disabled = data.hasGym;
+}
+function showError(result) {
+  $('#form-error').textContent = result.message;
+  $('#form-error').hidden = false;
+  const target = form.querySelector(`[name="${result.field}"]`);
+  if (target) {
+    if (target.closest('details')) target.closest('details').open = true;
+    target.setAttribute('aria-invalid','true'); target.focus();
+  }
+}
+function build({scroll=true,keep=false}={}) {
+  form.querySelectorAll('[aria-invalid]').forEach(e => e.removeAttribute('aria-invalid'));
+  $('#form-error').hidden = true;
+  if (!form.elements.namedItem('riskAnswer').value) { showError({field:'riskAnswer',message:'운동·식사 조절 전 확인 항목을 골라 주세요.'}); return; }
+  const next = makePlan(input(),new Date(`${startDate}T12:00:00`));
+  if (next.status==='error') { showError(next); return; }
+  const signature = next.status==='ok' ? JSON.stringify(next.p) : '';
+  if (!keep && signature!==lastSignature) { completed.clear(); shortened.clear(); startDate=dateKey(new Date()); }
+  plan = next.status==='ok' ? makePlan(next.p,new Date(`${startDate}T12:00:00`)) : next;
+  lastSignature = signature;
+  render(); renderMeal(); $('#meal-feedback').textContent='';
+  if (remember && !example && plan.status==='ok') persist();
+  if (scroll && window.innerWidth<=1000) { $('#result').scrollIntoView({behavior:'smooth',block:'start'}); $('#result-title').focus({preventScroll:true}); }
+}
 
-const photoInput = document.querySelector('#meal-photo');
-const preview = document.querySelector('#photo-preview');
-const mealImage = document.querySelector('#meal-image');
-const photoMessage = document.querySelector('#photo-message');
-let photoUrl;
-function clearPhoto() { if (photoUrl) URL.revokeObjectURL(photoUrl); photoUrl=undefined; mealImage.removeAttribute('src'); preview.hidden=true; photoInput.value=''; photoMessage.textContent='사진 없이도 식사 점검을 할 수 있습니다.'; }
-photoInput.addEventListener('change', () => {
-  const file=photoInput.files?.[0];
-  clearPhoto();
-  if (!file) return;
-  if (!['image/jpeg','image/png','image/webp'].includes(file.type) || file.size > 8*1024*1024) { photoMessage.textContent='JPG·PNG·WebP 파일을 8MB 이하로 선택해 주세요.'; return; }
-  photoUrl=URL.createObjectURL(file); mealImage.src=photoUrl; preview.hidden=false; photoMessage.textContent='사진은 현재 화면에서만 보이며 전송하거나 저장하지 않습니다.';
+function render() {
+  $('#result-tag').textContent = example ? '둘러보기용 예시' : plan.status==='ok' ? '입력한 조건 반영' : '확인이 필요해요';
+  if (plan.status==='caution') {
+    content.innerHTML=`<div class="panel caution"><h3>${escape(plan.title)}</h3><p>${escape(plan.message)}</p><ol>${plan.steps.map(s=>`<li>${escape(s)}</li>`).join('')}</ol></div>`;
+    return;
+  }
+  content.innerHTML = `<div id="workout-region"></div><div class="panel plan-card"><details class="fold"><summary>왜 이렇게 구성했나요?</summary><p>${escape(plan.budgetNote)}</p><ul class="reason-list">${plan.reasons.map(s=>`<li>${escape(s)}</li>`).join('')}</ul><p>유산소와 근력은 따로 살펴요. 모든 운동 시간을 더해 유산소 주 150분을 달성했다고 계산하지 않아요. 이 일정은 회복을 고려한 시작 예시이며 실제 가능한 요일로 옮길 때에도 근력·매트 운동 사이에 하루를 비워 주세요.</p></details><div class="goal-period"><h3>기간보다 먼저, 첫 2주를 정해요</h3><p>${escape(plan.timeline)}</p><p>${escape(plan.checkpoint)}</p>${plan.goalNotes.length ? `<div class="goal-tags">${plan.goalNotes.map(n=>`<span>${escape(n)}</span>`).join('')}</div>` : ''}<details class="fold"><summary>체중 변화 기록이 있다면 기간 참고하기</summary><p>비슷한 조건에서 잰 두 시점의 주간 평균이 필요해요. 하루 체중 두 개를 비교하지 마세요. 두 평균 시점은 2주 이상 떨어져 있어야 해요.</p>${plan.p.targetWeight===null ? '<p>먼저 입력 조건에 목표 체중을 적고 계획을 다시 만들어 주세요.</p>' : `<form id="trend-form" novalidate><div class="field-grid two"><label>이전 주간 평균 <span>kg</span><input type="number" name="earlier" min="25" max="300" step="0.1" inputmode="decimal" required></label><label>최근 주간 평균 <span>kg</span><input type="number" name="recent" min="25" max="300" step="0.1" inputmode="decimal" required></label><label>두 평균 시점 사이 <span>주</span><input type="number" name="weeks" min="2" max="26" step="0.1" placeholder="예: 4" inputmode="decimal" required></label></div><p>목표 체중 ${escape(plan.p.targetWeight)}kg 기준 · 추세 단순 연장</p><button class="outline-button" type="submit">기록으로 참고값 보기</button><div id="trend-feedback" role="status"></div></form>`}</details></div>${example ? '<p class="small-note">예시를 보고 있어요. 내 정보로 바꾼 뒤 계획을 만들어 주세요.</p>' : `<details class="save-box"><summary>다음에도 이어서 쓰고 싶다면</summary><p>저장하면 건강 입력값·완료 체크·10분 전환을 이 브라우저에 ${RULES.storageDays}일 보관해요. 사진은 제외돼요. 암호화된 보관함은 아니므로 공용기기에서는 저장하지 마세요.</p><div class="save-actions"><button type="button" id="save-plan" class="outline-button">이 기기에 기억하기</button><button type="button" id="forget-plan" class="text-button" ${remember ? '' : 'hidden'}>기기 저장 끄기</button></div><p id="save-message" role="status">${remember ? '기기 저장이 켜져 있어요. 완료 체크와 수정한 계획도 이 기기에만 반영돼요.' : '현재는 이 화면에서만 사용 중이에요.'}</p></details>`}</div>`;
+  renderWorkouts();
+}
+
+function renderWorkouts() {
+  const container = $('#workout-region');
+  const opened = [...container.querySelectorAll('details[open]')].map(d=>d.id);
+  const sessions = currentSessions();
+  const done = sessions.filter(s=>completed.has(s.date)).length;
+  const next = sessions.find(s=>!completed.has(s.date) && s.date>=dateKey(new Date())) || sessions.find(s=>!completed.has(s.date));
+  const total = sessions.reduce((n,s)=>n+s.minutes,0);
+  container.innerHTML = `<div class="start-card"><p class="eyebrow">${example ? '예시 · ' : ''}${done===sessions.length ? '이번 주 계획을 실천했어요' : '첫걸음은 구체적으로'}</p><h3>${next ? `${escape(next.title)}, 약 ${next.minutes}분` : '이번 주도 수고했어요.'}</h3><p>${next ? `${shortDate(next.date)}에 시작하는 예시예요. 날짜는 생활에 맞춰 옮겨도 괜찮아요.` : '더 채우기보다 회복하고, 다음 주에도 이어갈 수 있는지 컨디션을 살펴요.'}</p><div class="start-actions">${next ? `<button type="button" data-open="${next.day}">동작과 순서 보기 →</button>` : '<span>작은 실행이 쌓이고 있어요.</span>'}<span class="progress-text">${done} / ${sessions.length}회 완료 · 이번 주 계획 ${total}분</span></div></div><div class="panel plan-card"><div class="section-title"><h3>${escape(plan.title)}</h3><span>회복일 포함</span></div><div class="week-strip">${Array.from({length:7},(_,i)=>{
+    const key=dateKey(new Date(`${startDate}T12:00:00`),i), s=sessions.find(s=>s.day===i), dayName=new Date(`${key}T12:00:00`).toLocaleDateString('ko-KR',{weekday:'short'});
+    return `<div class="week-day ${s ? 'active' : ''} ${completed.has(key) ? 'done' : ''}"><strong>${dayName} ${key.slice(-2)}</strong><small>${s ? completed.has(key) ? '완료 ✓' : s.type==='strength' ? '근력' : s.type==='mat' ? '매트' : s.type==='recovery' ? '회복 걷기' : '걷기·러닝' : '쉬는 날'}</small></div>`;
+  }).join('')}</div>${sessions.map((s,i)=>`<details class="workout" id="session-${s.day}" ${opened.includes(`session-${s.day}`) || (!opened.length && s===next) || (!opened.length && !next && i===0) ? 'open' : ''}><summary><span class="date-label">${shortDate(s.date)}</span><span>${escape(s.title)}</span><span class="minutes">${s.minutes}분</span></summary><div class="workout-body"><div class="workout-tools"><label class="complete-label"><input type="checkbox" data-complete="${s.date}" ${completed.has(s.date) ? 'checked' : ''}>${completed.has(s.date) ? '오늘도 해냈어요' : '실천했어요'}</label>${plan.sessions[i].minutes>10 ? `<button type="button" class="outline-button" data-short="${s.date}">${s.short ? '원래 분량으로' : '바쁜 날은 10분만'}</button>` : ''}</div><ol class="workout-steps">${s.blocks.map(b=>`<li><span class="duration">약 ${b.minutes}분</span><strong>${escape(b.name)}</strong><p>${escape(b.detail)}</p></li>`).join('')}</ol><p class="small-note">${escape(s.note)}</p></div></details>`).join('')}<p class="safety-note">날카로운 통증·흉통·심한 어지럼이나 평소와 다른 숨참이 있으면 운동을 중단하고 상태에 맞는 도움을 받으세요.</p>${!sessions.some(s=>s.type==='strength') ? '<p class="small-note">이번 조합에는 전신 근력 운동이 없어요. 가능하다면 주 2일 근력을 함께 챙겨요.</p><button type="button" class="outline-button" id="add-strength">맨몸운동도 포함해 다시 짜기</button>' : ''}</div>`;
+}
+
+form.addEventListener('submit',e=>{e.preventDefault();example=false;build();});
+form.addEventListener('input',()=>{
+  syncOptions(); $('#form-error').hidden=true;
+  if (plan) { plan=null; example=false; $('#result-tag').textContent='조건 수정 중'; content.innerHTML='<div class="panel dirty"><h3>조건이 바뀌었어요.</h3><p>입력을 마치고 ‘내 한 주 만들기’를 누르면 바뀐 조건을 반영할게요.</p></div>'; }
+  renderMeal(); $('#meal-feedback').textContent='';
 });
-document.querySelector('#remove-photo').addEventListener('click',clearPhoto);
-window.addEventListener('pagehide',() => { if(photoUrl) URL.revokeObjectURL(photoUrl); });
-document.querySelector('#meal-form').addEventListener('submit',e => { e.preventDefault(); const data=new FormData(e.currentTarget); const advice=assessMeal(Object.fromEntries(['vegetable','protein','grain','sweetDrink'].map(k=>[k,data.has(k)]))); document.querySelector('#meal-feedback').innerHTML=`<strong>${escapeHtml(advice.title)}</strong><p>${escapeHtml(advice.detail)}</p>`; });
+$('#example').addEventListener('click',()=>{
+  example=true; completed.clear(); shortened.clear(); startDate=dateKey(new Date());
+  fill({goal:'habit',age:30,height:170,weight:75,targetWeight:null,days:3,minutes:30,budget:0,experience:'new',modes:['bodyweight','running'],walking:'comfortable',pushups:'unknown',diet:'mixed',exclusions:[],risk:false,hasGym:false});
+  build();
+});
+content.addEventListener('click',e=>{
+  const target=e.target.closest('button');
+  if (!target || plan?.status!=='ok') return;
+  if (target.dataset.open!==undefined) { const card=$(`#session-${target.dataset.open}`); card.open=true; card.scrollIntoView({behavior:'smooth',block:'start'}); return; }
+  if (target.dataset.short) { const key=target.dataset.short; shortened.has(key) ? shortened.delete(key) : shortened.add(key); completed.delete(key); renderWorkouts(); persistIfEnabled(); $(`[data-short="${key}"]`)?.focus(); return; }
+  if (target.id==='add-strength') { form.querySelector('[name="modes"][value="bodyweight"]').checked=true; build({scroll:false}); return; }
+  if (target.id==='save-plan') { remember=true; persist(); $('#forget-plan').hidden=!remember; return; }
+  if (target.id==='forget-plan') {
+    try { localStorage.removeItem(STORAGE_KEY); remember=false; target.hidden=true; $('#save-message').textContent='기기 저장을 지웠어요. 지금 화면은 계속 사용할 수 있어요.'; }
+    catch { $('#save-message').textContent='브라우저가 저장소 접근을 막고 있어 삭제를 확인하지 못했어요. 브라우저의 사이트 데이터 설정을 확인해 주세요.'; }
+  }
+});
+content.addEventListener('change',e=>{
+  const key=e.target.dataset.complete;
+  if (!key || plan?.status!=='ok') return;
+  e.target.checked ? completed.add(key) : completed.delete(key);
+  renderWorkouts(); persistIfEnabled(); $(`[data-complete="${key}"]`)?.focus();
+});
+content.addEventListener('submit',e=>{
+  if (e.target.id!=='trend-form') return;
+  e.preventDefault();
+  const result=estimateTimeline({...Object.fromEntries(new FormData(e.target)),target:plan.p.targetWeight,height:plan.p.height});
+  $('#trend-feedback').className='timeline-feedback';
+  $('#trend-feedback').innerHTML=result.status==='error' ? escape(result.message) : `<strong>${escape(result.title)}</strong><p>${escape(result.detail)}</p>`;
+});
+
+function persist() {
+  if (example || plan?.status!=='ok') return;
+  try { localStorage.setItem(STORAGE_KEY,packState(plan.p,completed,startDate,Date.now(),shortened)); if ($('#save-message')) $('#save-message').textContent='이 브라우저에 30일 동안 기억할게요. 다른 기기와 공유되지 않으며 사진은 저장하지 않아요.'; }
+  catch { remember=false; if ($('#save-message')) $('#save-message').textContent='브라우저에 저장하지 못했어요. 현재 화면은 계속 사용할 수 있어요.'; }
+}
+function persistIfEnabled() { if (remember && !example) persist(); }
+
+function mealProfile() { return plan?.status==='ok' ? plan.p : input(); }
+function renderMeal() {
+  const profile=mealProfile();
+  if (profile.risk || plan?.status==='caution') { $('#meal-suggestion').innerHTML='<p>건강상 확인이 필요한 경우에는 일반 식사 예시를 적용하기 전에 이미 안내받은 식사 계획을 우선해 주세요.</p>'; return; }
+  const meal=mealOptions(profile,context,variant);
+  $('#meal-suggestion').innerHTML=`<h3>${escape(meal.title)}</h3><p>${escape(meal.focus)}</p><ul class="food-parts">${meal.parts.map(p=>`<li>${escape(p)}</li>`).join('')}</ul>${meal.canSwap ? '<button type="button" id="swap-food" class="outline-button">다른 단백질 식품으로 바꾸기</button>' : ''}<p>${escape(meal.tip)}</p><details class="fold"><summary>피할 식품과 분량 안내</summary><p>${escape(meal.caution)}</p><p>구성 예시이며 개인별 열량·영양소 처방이 아니에요. 매 끼니 이 메뉴를 맞출 필요는 없어요.</p></details>`;
+}
+document.querySelectorAll('[data-context]').forEach(button=>button.addEventListener('click',()=>{
+  context=button.dataset.context; variant=0;
+  document.querySelectorAll('[data-context]').forEach(b=>b.setAttribute('aria-pressed',String(b===button))); renderMeal();
+}));
+$('#meal-suggestion').addEventListener('click',e=>{if(e.target.closest('#swap-food')){variant++;renderMeal();$('#swap-food')?.focus();}});
+$('#meal-form').addEventListener('submit',e=>{
+  e.preventDefault();
+  if (mealProfile().risk || plan?.status==='caution') { $('#meal-feedback').textContent='현재 상태에 맞는 식사 계획은 의료진·영양 전문가의 안내를 우선해 주세요.'; return; }
+  const data=new FormData(e.currentTarget);
+  const result=assessMeal({...Object.fromEntries(['vegetable','protein','grain','sweetDrink'].map(k=>[k,data.has(k)])),amount:data.get('amount')},mealProfile());
+  $('#meal-feedback').innerHTML=`<strong>${escape(result.title)}</strong><ul>${result.actions.map(a=>`<li>${escape(a)}</li>`).join('')}</ul><p>${escape(result.detail)}</p>`;
+});
+
+let photoUrl;
+function clearPhoto(message='사진은 전송하거나 기기에 저장하지 않아요.') {
+  if (photoUrl) URL.revokeObjectURL(photoUrl); photoUrl=undefined;
+  $('#meal-image').removeAttribute('src'); $('#photo-preview').hidden=true; $('#meal-photo').value=''; $('#photo-message').textContent=message;
+}
+$('#meal-photo').addEventListener('change',()=>{
+  const file=$('#meal-photo').files?.[0]; clearPhoto();
+  if (!file) return;
+  if (!['image/jpeg','image/png','image/webp'].includes(file.type) || file.size>8*1024*1024) { clearPhoto('JPG·PNG·WebP 파일을 8MB 이하로 선택해 주세요.'); return; }
+  photoUrl=URL.createObjectURL(file); $('#meal-image').src=photoUrl; $('#photo-preview').hidden=false; $('#photo-message').textContent='이 사진은 현재 화면에서만 보여요. 자동 분석·전송·저장은 하지 않아요.';
+});
+$('#meal-image').addEventListener('error',()=>{if(photoUrl) clearPhoto('이미지를 읽지 못했어요. 다른 JPG·PNG·WebP 파일을 선택해 주세요.');});
+$('#remove-photo').addEventListener('click',()=>clearPhoto());
+window.addEventListener('pagehide',()=>clearPhoto());
+
+$('#clear-all').addEventListener('click',()=>{
+  let removed=true;
+  try { localStorage.removeItem(STORAGE_KEY); } catch { removed=false; }
+  remember=false; plan=null; example=false; completed.clear(); shortened.clear(); lastSignature='';startDate=dateKey(new Date());
+  form.reset(); form.querySelectorAll('[aria-invalid]').forEach(e=>e.removeAttribute('aria-invalid')); $('#meal-form').reset(); clearPhoto(); syncOptions(); variant=0;
+  content.innerHTML=initialContent; $('#result-tag').textContent='준비 중'; $('#form-error').hidden=true; $('#restore-message').hidden=true; $('#meal-feedback').textContent=''; renderMeal();
+  $('#clear-message').textContent=removed ? '입력·사진·기기 저장 정보를 모두 지웠어요.' : '현재 입력과 사진은 지웠지만 저장소 삭제는 확인하지 못했어요. 브라우저의 사이트 데이터 설정에서 삭제해 주세요.';
+});
+
+try {
+  const text=localStorage.getItem(STORAGE_KEY);
+  if (text) {
+    const state=unpackState(text);
+    if (state) {
+      remember=true; fill(state.profile);
+      const age=(new Date(`${dateKey(new Date())}T12:00:00`)-new Date(`${state.startDate}T12:00:00`))/86400000;
+      startDate=age>=0 && age<7 ? state.startDate : dateKey(new Date());
+      completed=new Set(age>=0 && age<7 ? state.completed : []); shortened=new Set(age>=0 && age<7 ? state.shortened : []);
+      lastSignature=JSON.stringify(state.profile); build({scroll:false,keep:true});
+      $('#restore-message').textContent=age>=7 ? '기억해 둔 조건으로 새 한 주를 준비했어요. 컨디션이 달라졌다면 입력을 수정해 주세요.' : '이 기기에 기억해 둔 계획을 불러왔어요. 이어서 시작해 보세요.'; $('#restore-message').hidden=false;
+    } else { localStorage.removeItem(STORAGE_KEY); $('#restore-message').textContent='기기 저장 정보가 만료됐거나 읽을 수 없어 지웠어요. 새로 시작할 수 있어요.'; $('#restore-message').hidden=false; }
+  }
+} catch { /* Storage is optional; the core planner works without it. */ }
+syncOptions(); renderMeal();
+
