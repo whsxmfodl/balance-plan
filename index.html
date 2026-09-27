@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="시간과 예산, 선호 운동에 맞춰 실천 가능한 운동과 식사 계획을 살펴보세요.">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; connect-src 'none'; form-action 'none'; object-src 'none'; base-uri 'none'">
+  <title>밸런스 플랜 | 나에게 맞는 운동·식사 계획</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='17' fill='%23162940'/%3E%3Cpath d='M12 36h10l7-14 8 21 5-10h10' fill='none' stroke='%23b8f36b' stroke-width='5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="./styles.css">
+  <script type="module" src="./app.mjs"></script>
+</head>
+<body>
+  <header class="topbar"><div class="brand"><span class="brand-mark" aria-hidden="true">↗</span><span>밸런스 플랜</span></div><span class="top-note">성인용 일반 웰니스 가이드</span></header>
+  <main class="shell">
+    <div class="heading"><div><p class="eyebrow">나의 조건으로 시작하기</p><h1>지속할 수 있는 계획을 세워보세요</h1><p class="intro">숫자는 출발점입니다. 가능한 시간과 좋아하는 방식을 바탕으로 이번 주에 할 일을 제안합니다.</p></div><span class="privacy-chip">입력값은 서버로 전송되지 않아요</span></div>
+    <div class="workspace">
+      <section class="panel input-panel" aria-labelledby="input-title">
+        <div class="panel-head"><h2 id="input-title">내 정보와 목표</h2><span>체성분·푸시업은 선택</span></div>
+        <form id="planner-form" novalidate>
+          <fieldset><legend><span class="step">01</span> 현재 상태</legend><div class="field-grid thirds">
+            <label>나이 <span class="unit">세</span><input name="age" type="number" min="18" max="100" value="30" required inputmode="numeric"></label>
+            <label>키 <span class="unit">cm</span><input name="height" type="number" min="100" max="230" step="0.1" value="170" required inputmode="decimal"></label>
+            <label>현재 체중 <span class="unit">kg</span><input name="weight" type="number" min="25" max="300" step="0.1" value="75" required inputmode="decimal"></label>
+            <label>현재 체지방률 <span class="unit">% · 선택</span><input name="fat" type="number" min="3" max="70" step="0.1" value="28" inputmode="decimal"></label>
+            <label>현재 골격근량 <span class="unit">kg · 선택</span><input name="muscle" type="number" min="1" max="100" step="0.1" value="28" inputmode="decimal"></label>
+          </div><p class="field-help">모르면 빈칸으로 두세요. 사진으로 대신 추정하지 않습니다.</p><label class="select-field">평소 통증 없이 가능한 바닥 푸시업 <span>선택</span><select name="pushups"><option value="unknown">모름 · 입력하지 않음</option><option value="none">0회</option><option value="few">1~5회</option><option value="some">6~15회</option><option value="many">16회 이상</option></select></label><p class="field-help">지금 최대 횟수를 시험하지 마세요. 이 답은 상체 운동 난이도에만 반영됩니다.</p></fieldset>
+          <fieldset><legend><span class="step">02</span> 원하는 변화</legend><div class="field-grid thirds">
+            <label>목표 체중 <span class="unit">kg</span><input name="targetWeight" type="number" min="25" max="300" step="0.1" value="70" required inputmode="decimal"></label>
+            <label>목표 체지방률 <span class="unit">% · 선택</span><input name="targetFat" type="number" min="3" max="70" step="0.1" value="24" inputmode="decimal"></label>
+            <label>목표 골격근량 <span class="unit">kg · 선택</span><input name="targetMuscle" type="number" min="1" max="100" step="0.1" value="29" inputmode="decimal"></label>
+          </div></fieldset>
+          <fieldset><legend><span class="step">03</span> 현실적인 여건</legend><div class="field-grid thirds">
+            <label>주당 운동일 <span class="unit">일</span><input name="days" type="number" min="1" max="7" value="3" required inputmode="numeric"></label>
+            <label>하루 운동 시간 <span class="unit">분</span><input name="minutes" type="number" min="10" max="180" step="5" value="40" required inputmode="numeric"></label>
+            <label>월 운동 예산 <span class="unit">만원</span><input name="budget" type="number" min="0" max="500" step="1" value="5" required inputmode="numeric"></label>
+          </div><p class="field-help">운동비 기준입니다. 식비는 포함하지 않습니다.</p>
+            <div class="choice-label">선호하는 운동 <span>복수 선택 가능</span></div><div class="choices" id="modes">
+              <label><input type="checkbox" name="modes" value="gym" checked><span>헬스</span></label>
+              <label><input type="checkbox" name="modes" value="pilates"><span>필라테스</span></label>
+              <label><input type="checkbox" name="modes" value="running" checked><span>러닝</span></label>
+              <label><input type="checkbox" name="modes" value="hiking"><span>등산</span></label>
+              <label><input type="checkbox" name="modes" value="bodyweight"><span>맨몸운동</span></label>
+            </div>
+          </fieldset>
+          <div class="safety-box"><label class="safety-check"><input name="risk" type="checkbox"><span>임신·수유, 섭식 문제, 치료 중인 질환, 운동을 제한하는 통증·부상이 있어요</span></label><p>해당하면 자동 계획 대신 전문가와 목표를 확인하도록 안내합니다.</p></div>
+          <button class="primary" type="submit">내 계획 보기 <span aria-hidden="true">→</span></button>
+          <p id="form-error" class="form-error" role="alert" hidden></p>
+        </form>
+      </section>
+      <section class="panel result-panel" id="result" aria-labelledby="result-title" aria-live="polite"><div class="panel-head"><h2 id="result-title">이번 주 계획</h2><span class="result-tag">예시 입력</span></div><div id="result-content"></div></section>
+    </div>
+    <section class="meal-panel panel" aria-labelledby="meal-title"><div class="meal-panel-intro"><div><p class="eyebrow">오늘의 식사</p><h2 id="meal-title">먹은 한 끼를 돌아보기</h2><p>사진은 이 기기에서만 미리 봅니다. 음식 구성을 직접 고르면 균형을 점검해 드립니다.</p></div><span class="local-badge">사진 전송·저장 없음</span></div><div class="meal-check-layout"><div class="food-photo"><label class="file-pick" for="meal-photo">식사 사진 선택 <span>JPG · PNG · WebP, 8MB 이하</span></label><input id="meal-photo" type="file" accept="image/jpeg,image/png,image/webp"><div id="photo-preview" class="photo-preview" hidden><img id="meal-image" alt="선택한 식사 사진 미리보기"><button type="button" id="remove-photo">사진 지우기</button></div><p id="photo-message" role="status">사진 없이도 식사 점검을 할 수 있습니다.</p></div><form id="meal-form" novalidate><p class="check-title">먹은 음식에 해당하면 선택하세요</p><div class="meal-choices"><label><input type="checkbox" name="vegetable"> 채소 또는 과일</label><label><input type="checkbox" name="protein"> 달걀·두부·콩·생선·고기 등 단백질 식품</label><label><input type="checkbox" name="grain"> 밥·빵·면·감자 등 곡물·전분 식품</label><label><input type="checkbox" name="sweetDrink"> 단 음료 또는 디저트</label></div><button class="secondary" type="submit">이 한 끼 점검하기</button><div id="meal-feedback" class="meal-feedback" role="status">사진만으로 재료와 분량을 정확하게 알 수 없습니다. 선택한 음식 구성을 바탕으로 안내합니다.</div></form></div></section>
+    <section class="evidence" aria-labelledby="evidence-title"><div class="section-heading"><p class="eyebrow">추천 기준</p><h2 id="evidence-title">근거와 계획 가정을 구분했습니다</h2></div><div class="evidence-grid"><div><strong>확인된 일반 기준</strong><p>성인은 주 150~300분 중강도 활동과 주 2일 이상 근력 운동이 권고됩니다. 식사는 채소·과일·통곡물·콩류 등 다양한 식품을 중심으로 구성합니다. 점진적인 체중 변화가 유지에 유리합니다.</p></div><div><strong>이 도구의 계획 가정</strong><p>운동별 순서·시간 배분, 체중 변화 속도, 4주 점검 주기는 사용하기 쉬운 예시입니다. 개인에게 검증된 처방이나 실제 달성 시점 예측이 아닙니다. 시설 요금도 추정하지 않습니다.</p></div><div><strong>안전상 보류 기준</strong><p>저체중 범위, 매우 낮은 체지방률 목표, 큰 체중 변화, 건강상 주의가 필요한 경우 자동 추천을 보류합니다. 이는 의료 진단 기준이 아닌 보수적인 제품 규칙입니다.</p></div></div></section>
+    <section class="notes" aria-labelledby="notes-title"><div class="section-heading"><p class="eyebrow">기능 검토</p><h2 id="notes-title">신체 사진·영상은 어디까지 참고할 수 있을까요?</h2></div><div class="note-grid"><article><span class="note-index">01 / 신체 사진</span><h3>변화 기록은 조건을 맞춰야 의미가 있어요</h3><p>같은 거리·조명·자세의 사진은 외형 변화의 참고 기록이 될 수 있습니다. 사진 한 장으로 체지방률이나 골격근량을 확정하거나 건강 상태를 진단할 수는 없습니다.</p></article><article><span class="note-index">02 / 운동 영상</span><h3>보이는 동작만 제한적으로 살펴봅니다</h3><p>촬영 각도가 맞으면 반복 횟수, 대략적인 동작 범위·속도를 볼 수 있습니다. 통증의 원인, 실제 힘의 분배, 보이지 않는 관절 움직임은 판단하기 어렵습니다. 대면 트레이너의 다각도 관찰·즉시 교정·촉진을 대체하지 않습니다.</p></article><article><span class="note-index">03 / 보호</span><h3>신체 사진 전용 업로드는 없습니다</h3><p>식사 사진 선택기에서 다른 이미지를 골라도 현재 기기의 미리보기에만 사용됩니다. 신체 사진 분석 기능은 제공하지 않습니다. 추후에는 기기 내 분석을 우선하고, 원본 저장·외부 전송을 피할 수 있는지 검증해야 합니다. 원격 처리가 필요하다면 동의·암호화·짧은 보관·삭제·접근 기록과 보안 검토가 선행되어야 합니다.</p></article></div></section>
+    <footer><span>일반적인 계획 보조 도구이며 진단·치료·개별 영양 처방이 아닙니다.</span><span><a href="https://www.who.int/initiatives/behealthy/physical-activity" target="_blank" rel="noopener noreferrer">WHO 운동</a> · <a href="https://www.cdc.gov/physical-activity-basics/adding-adults/what-counts.html" target="_blank" rel="noopener noreferrer">CDC 근력</a> · <a href="https://www.who.int/news-room/fact-sheets/detail/healthy-diet" target="_blank" rel="noopener noreferrer">WHO 식사</a> · <a href="https://www.cdc.gov/healthy-weight-growth/losing-weight/index.html" target="_blank" rel="noopener noreferrer">CDC 체중</a> · <a href="https://pubmed.ncbi.nlm.nih.gov/30363033/" target="_blank" rel="noopener noreferrer">푸시업 연구</a> · <a href="https://pubmed.ncbi.nlm.nih.gov/31334579/" target="_blank" rel="noopener noreferrer">사진 측정 연구</a></span></footer>
+  </main>
+</body>
+</html>
