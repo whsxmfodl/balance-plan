@@ -63,6 +63,18 @@ const metadata = {
   included: foods.length,
   excluded: skipped,
 };
-const output = path.join(import.meta.dirname, 'dist', 'food-data.mjs');
-fs.writeFileSync(output, `// Source: ${metadata.source}\n// Nutrition values are per basis (100g or 100ml), never personal intake.\nexport const FOOD_META = ${JSON.stringify(metadata)};\nexport const FOODS = ${JSON.stringify(foods)};\n`);
-console.log(JSON.stringify({ ...metadata, bytes: fs.statSync(output).size, general: foods.filter(row => !row[9]).length, branded: foods.filter(row => row[9]).length }));
+const outputDir = path.join(import.meta.dirname, 'dist');
+const chunkSize = 3500;
+const chunks = [];
+for (let start = 0; start < foods.length; start += chunkSize) {
+  const number = chunks.length + 1;
+  const filename = `food-data-${number}.mjs`;
+  const contents = `// Source: ${metadata.source}\nexport const FOODS = ${JSON.stringify(foods.slice(start, start + chunkSize))};\n`;
+  if (Buffer.byteLength(contents) >= 900_000) throw new Error(`${filename} 파일이 업로드 제한에 너무 가깝습니다.`);
+  fs.writeFileSync(path.join(outputDir, filename), contents);
+  chunks.push(filename);
+}
+const imports = chunks.map((filename, index) => `import { FOODS as part${index + 1} } from './${filename}';`).join('\n');
+const output = path.join(outputDir, 'food-data.mjs');
+fs.writeFileSync(output, `${imports}\nexport const FOOD_META = ${JSON.stringify(metadata)};\nexport const FOODS = [${chunks.map((_, index) => `...part${index + 1}`).join(',')}];\n`);
+console.log(JSON.stringify({ ...metadata, chunks, bytes: chunks.map(filename => fs.statSync(path.join(outputDir, filename)).size), general: foods.filter(row => !row[9]).length, branded: foods.filter(row => row[9]).length }));
