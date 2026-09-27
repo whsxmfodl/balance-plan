@@ -31,4 +31,3 @@ export function assessMeal(input,profile={}) {
   if (input.amount === 'less') actions.unshift('배가 고프거나 식사를 충분히 못 했다면 먹을 수 있는 음식으로 보충해요.');
   return {title:input.amount === 'more' ? '한 끼 때문에 계획을 처음부터 다시 할 필요는 없어요' : selected.length === 3 ? '기본 구성이 들어간 한 끼예요' : '다음 한 끼에서 하나만 보완해 봐요',actions:actions.length ? actions : ['지금의 다양한 구성을 이어가요. 양은 포만감과 실제 변화 추세를 함께 살펴요.'],detail:'분량·재료·조리법을 알 수 없어 칼로리나 목표가 늦어진 날짜를 계산하지 않아요. 한 끼를 성공·실패로 나누지 않고 다음 선택을 돕습니다.'};
 }
-

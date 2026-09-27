@@ -33,6 +33,9 @@ function syncOptions() {
   const data = input();
   $('#gym-options').hidden = !data.modes.includes('gym');
   form.elements.namedItem('facilityCost').disabled = data.hasGym;
+  const older = Number(data.age) >= 65;
+  $('#older-options').hidden = !older;
+  form.elements.namedItem('balance').disabled = !older;
 }
 function showError(result) {
   $('#form-error').textContent = result.message;
@@ -52,6 +55,7 @@ function build({scroll=true,keep=false}={}) {
   const signature = next.status==='ok' ? JSON.stringify(next.p) : '';
   if (!keep && signature!==lastSignature) { completed.clear(); shortened.clear(); startDate=dateKey(new Date()); }
   plan = next.status==='ok' ? makePlan(next.p,new Date(`${startDate}T12:00:00`)) : next;
+  if (plan.status==='caution') clearStoredForReview();
   lastSignature = signature;
   render(); renderMeal(); $('#meal-feedback').textContent='';
   if (remember && !example && plan.status==='ok') persist();
@@ -75,7 +79,7 @@ function renderWorkouts() {
   const done = sessions.filter(s=>completed.has(s.date)).length;
   const next = sessions.find(s=>!completed.has(s.date) && s.date>=dateKey(new Date())) || sessions.find(s=>!completed.has(s.date));
   const total = sessions.reduce((n,s)=>n+s.minutes,0);
-  container.innerHTML = `<div class="start-card"><p class="eyebrow">${example ? '예시 · ' : ''}${done===sessions.length ? '이번 주 계획을 실천했어요' : '첫걸음은 구체적으로'}</p><h3>${next ? `${escape(next.title)}, 약 ${next.minutes}분` : '이번 주도 수고했어요.'}</h3><p>${next ? `${shortDate(next.date)}에 시작하는 예시예요. 날짜는 생활에 맞춰 옮겨도 괜찮아요.` : '더 채우기보다 회복하고, 다음 주에도 이어갈 수 있는지 컨디션을 살펴요.'}</p><div class="start-actions">${next ? `<button type="button" data-open="${next.day}">동작과 순서 보기 →</button>` : '<span>작은 실행이 쌓이고 있어요.</span>'}<span class="progress-text">${done} / ${sessions.length}회 완료 · 이번 주 계획 ${total}분</span></div></div><div class="panel plan-card"><div class="section-title"><h3>${escape(plan.title)}</h3><span>회복일 포함</span></div><div class="week-strip">${Array.from({length:7},(_,i)=>{
+  container.innerHTML = `<div class="start-card"><p class="eyebrow">${example ? '예시 · ' : ''}${done===sessions.length ? '이번 주 계획을 실천했어요' : '첫걸음은 구체적으로'}</p><h3>${next ? `${escape(next.title)}, 약 ${next.minutes}분` : '이번 주도 수고했어요.'}</h3><p>${next ? `${shortDate(next.date)}에 시작하는 예시예요. 날짜는 생활에 맞춰 옮겨도 괜찮아요.` : '더 채우기보다 회복하고, 다음 주에도 이어갈 수 있는지 컨디션을 살펴요.'}</p><div class="start-actions">${next ? `<button type="button" data-open="${next.day}">동작과 순서 보기 →</button>` : '<span>작은 실행이 쌓이고 있어요.</span>'}<span class="progress-text">${done} / ${sessions.length}회 완료 · 이번 주 계획 ${total}분</span></div></div><div class="panel plan-card"><div class="section-title"><h3>${escape(plan.title)}</h3><span>회복일 포함</span></div><p class="small-note">${escape(plan.ageNote)}</p><div class="week-strip">${Array.from({length:7},(_,i)=>{
     const key=dateKey(new Date(`${startDate}T12:00:00`),i), s=sessions.find(s=>s.day===i), dayName=new Date(`${key}T12:00:00`).toLocaleDateString('ko-KR',{weekday:'short'});
     return `<div class="week-day ${s ? 'active' : ''} ${completed.has(key) ? 'done' : ''}"><strong>${dayName} ${key.slice(-2)}</strong><small>${s ? completed.has(key) ? '완료 ✓' : s.type==='strength' ? '근력' : s.type==='mat' ? '매트' : s.type==='recovery' ? '회복 걷기' : '걷기·러닝' : '쉬는 날'}</small></div>`;
   }).join('')}</div>${sessions.map((s,i)=>`<details class="workout" id="session-${s.day}" ${opened.includes(`session-${s.day}`) || (!opened.length && s===next) || (!opened.length && !next && i===0) ? 'open' : ''}><summary><span class="date-label">${shortDate(s.date)}</span><span>${escape(s.title)}</span><span class="minutes">${s.minutes}분</span></summary><div class="workout-body"><div class="workout-tools"><label class="complete-label"><input type="checkbox" data-complete="${s.date}" ${completed.has(s.date) ? 'checked' : ''}>${completed.has(s.date) ? '오늘도 해냈어요' : '실천했어요'}</label>${plan.sessions[i].minutes>10 ? `<button type="button" class="outline-button" data-short="${s.date}">${s.short ? '원래 분량으로' : '바쁜 날은 10분만'}</button>` : ''}</div><ol class="workout-steps">${s.blocks.map(b=>`<li><span class="duration">약 ${b.minutes}분</span><strong>${escape(b.name)}</strong><p>${escape(b.detail)}</p></li>`).join('')}</ol><p class="small-note">${escape(s.note)}</p></div></details>`).join('')}<p class="safety-note">날카로운 통증·흉통·심한 어지럼이나 평소와 다른 숨참이 있으면 운동을 중단하고 상태에 맞는 도움을 받으세요.</p>${!sessions.some(s=>s.type==='strength') ? '<p class="small-note">이번 조합에는 전신 근력 운동이 없어요. 가능하다면 주 2일 근력을 함께 챙겨요.</p><button type="button" class="outline-button" id="add-strength">맨몸운동도 포함해 다시 짜기</button>' : ''}</div>`;
@@ -84,6 +88,8 @@ function renderWorkouts() {
 form.addEventListener('submit',e=>{e.preventDefault();example=false;build();});
 form.addEventListener('input',()=>{
   syncOptions(); $('#form-error').hidden=true;
+  const latest=input();
+  if (latest.risk || (Number(latest.age)>=65 && (latest.balance!=='clear' || !['comfortable','running'].includes(latest.walking)))) clearStoredForReview();
   if (plan) { plan=null; example=false; $('#result-tag').textContent='조건 수정 중'; content.innerHTML='<div class="panel dirty"><h3>조건이 바뀌었어요.</h3><p>입력을 마치고 ‘내 한 주 만들기’를 누르면 바뀐 조건을 반영할게요.</p></div>'; }
   renderMeal(); $('#meal-feedback').textContent='';
 });
@@ -118,6 +124,17 @@ content.addEventListener('submit',e=>{
   $('#trend-feedback').innerHTML=result.status==='error' ? escape(result.message) : `<strong>${escape(result.title)}</strong><p>${escape(result.detail)}</p>`;
 });
 
+function clearStoredForReview() {
+  if (!remember) return;
+  try {
+    localStorage.removeItem(STORAGE_KEY); remember=false;
+    $('#restore-message').textContent='새 조건을 먼저 확인해야 해서 이전 기기 저장 계획을 지웠어요. 다시 사용할 계획은 확인 후 직접 저장해 주세요.';
+  } catch {
+    remember=false;
+    $('#restore-message').textContent='새 조건은 확인이 필요하지만 이전 기기 저장을 지우지 못했어요. 브라우저의 사이트 데이터 설정에서 삭제해 주세요.';
+  }
+  $('#restore-message').hidden=false;
+}
 function persist() {
   if (example || plan?.status!=='ok') return;
   try { localStorage.setItem(STORAGE_KEY,packState(plan.p,completed,startDate,Date.now(),shortened)); if ($('#save-message')) $('#save-message').textContent='이 브라우저에 30일 동안 기억할게요. 다른 기기와 공유되지 않으며 사진은 저장하지 않아요.'; }
@@ -184,4 +201,3 @@ try {
   }
 } catch { /* Storage is optional; the core planner works without it. */ }
 syncOptions(); renderMeal();
-

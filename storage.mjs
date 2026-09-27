@@ -15,4 +15,3 @@ export function unpackState(text,now=Date.now()) {
     return {...state,profile:checked.p,completed:state.completed.filter(d => typeof d==='string' && /^\d{4}-\d{2}-\d{2}$/.test(d)),shortened:(Array.isArray(state.shortened) ? state.shortened : []).filter(d => typeof d==='string' && /^\d{4}-\d{2}-\d{2}$/.test(d))};
   } catch { return null; }
 }
-

@@ -9,9 +9,9 @@ const base={age:30,height:170,weight:75,targetWeight:70,days:3,minutes:30,budget
 const start=new Date('2026-09-28T12:00:00');
 let scenarios=0;
 const modeKeys=['gym','bodyweight','pilates','running','hiking'];
-for (const experience of ['new','regular']) for (const days of [1,2,3,4,5,6,7]) for (const minutes of [10,15,30,45,180]) for (let mask=1;mask<32;mask++) {
+for (const age of [30,65,80]) for (const experience of ['new','regular']) for (const days of [1,2,3,4,5,6,7]) for (const minutes of [10,15,30,45,180]) for (let mask=1;mask<32;mask++) {
   const modes=modeKeys.filter((_,i)=>mask&(1<<i));
-  const p=makePlan({...base,experience,days,minutes,modes,goal:mask%2?'muscle':'habit',hasGym:true},start);
+  const p=makePlan({...base,age,balance:'clear',experience,days,minutes,modes,goal:mask%2?'muscle':'habit',hasGym:true},start);
   assert.equal(p.status,'ok');
   assert.equal(p.sessions.length,days);
   assert.equal(p.total,p.sessions.reduce((n,s)=>n+s.minutes,0));
@@ -22,9 +22,11 @@ for (const experience of ['new','regular']) for (const days of [1,2,3,4,5,6,7]) 
     assert.equal(s.blocks.reduce((n,b)=>n+b.minutes,0),s.minutes,'shown blocks fit the session');
     assert.ok(s.blocks.every(b=>b.minutes>0));
     assert.ok(s.strengthSets*2<=s.minutes-4,'sets include time for rest');
+    assert.equal(s.balanceMinutes,age>=65?2:0);
     const brief=makeSession(s.mode,p.p,s.day,true);
     assert.equal(brief.minutes,10);
     assert.equal(brief.blocks.reduce((n,b)=>n+b.minutes,0),10);
+    assert.equal(brief.balanceMinutes,age>=65?2:0);
   }
   scenarios++;
 }
@@ -38,6 +40,23 @@ assert.equal(makePlan({...base,targetFat:70,targetMuscle:60}).status,'error');
 assert.equal(makePlan({...base,risk:true}).status,'caution');
 assert.equal(makePlan({...base,targetWeight:45}).status,'caution');
 assert.equal(makePlan({...base,age:65}).status,'caution');
+assert.equal(makePlan({...base,age:65,balance:'clear'}).status,'ok');
+assert.equal(makePlan({...base,age:65,balance:'concern'}).status,'caution');
+assert.equal(makePlan({...base,age:65,balance:'clear',walking:'hard'}).status,'caution');
+assert.equal(makePlan({...base,age:65,balance:'clear',walking:'unknown'}).status,'caution');
+assert.equal(makePlan({...base,age:17}).status,'error');
+assert.equal(makePlan({...base,balance:'__proto__'}).status,'error');
+for(const age of [18,29,40,55,64]) assert.deepEqual(makePlan({...base,age},start).sessions,makePlan(base,start).sessions,'do not fabricate age-based exercise multipliers');
+assert.notDeepEqual(makePlan({...base,age:65,balance:'clear'},start).sessions,makePlan({...base,age:64},start).sessions);
+for(const mode of ['bodyweight','gym','pilates']) for(const pushups of ['unknown','none','few','some','many']){
+  const p=makePlan({...base,age:69,balance:'clear',modes:[mode],hasGym:true,avoidFloor:true,pushups},start);
+  assert.equal(p.status,'ok');
+  assert.ok(p.sessions.every(s=>s.moves.every(m=>!['bridge','bird','deadbug','side','floor'].includes(m.key))));
+}
+const scarce=makePlan({...base,age:65,balance:'clear',days:1,minutes:10},start);
+assert.equal(scarce.sessions.length,1);
+assert.equal(scarce.total,10);
+assert.ok(scarce.reasons.some(r=>r.includes('3日')||r.includes('3일')));
 assert.equal(makePlan({...base,targetFat:10}).status,'caution');
 assert.equal(makePlan({...base,targetWeight:76}).status,'error');
 assert.equal(makePlan({...base,targetWeight:'',fat:'',muscle:'',targetFat:'',targetMuscle:''}).status,'ok');
@@ -75,4 +94,3 @@ assert.equal(unpackState(packed,now+31*86400000),null);
 assert.equal(unpackState('{bad json}',now),null);
 assert.equal(unpackState(JSON.stringify({version:2,expires:now+1000,profile:{age:30},startDate:'2026-09-28',completed:[]}),now),null);
 console.log(`${scenarios}개 일정 조합: 시간 합계·회복일·축소 계획 통과. 입력·목표 반영·예산·식사 제한·기간·저장 검증 통과.`);
-
