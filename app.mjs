@@ -228,7 +228,7 @@ foodLookup.addEventListener('toggle', async () => {
   if (!foodLookup.open || foodRows) return;
   foodStatus.textContent = '식약처 음식 자료를 불러오는 중이에요…';
   try {
-    foodLoad ||= import('./food-data.mjs');
+    foodLoad ||= import('./food-data.mjs?v=20260928-2');
     const data = await foodLoad;
     foodRows = data.FOODS;
     foodStatus.textContent = `음식 ${data.FOOD_META.included.toLocaleString('ko-KR')}건을 불러왔어요. 이름을 두 글자 이상 입력해 주세요.`;
