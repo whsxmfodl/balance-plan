@@ -131,7 +131,7 @@ export function makeSession(mode,p,day=0,short=false) {
   const work = minutes-warm-cool-balanceMinutes;
   const blocks = [{name:'몸풀기',minutes:warm,detail:'천천히 걷고 어깨·발목을 편하게 움직여요.'}];
   if (balanceMinutes) blocks.push({name:'벽 옆에서 균형 연습',minutes:balanceMinutes,detail:'장애물이 없는 미끄럽지 않은 곳에서 벽에 손을 대고, 한 발 뒤꿈치를 다른 발 앞쪽에 가까이 놓으며 천천히 3~5걸음 걸어요. 불안정하면 즉시 멈추고 도움을 받아요. 쉬는 시간을 포함하며 빠르게 반복할 필요는 없어요.'});
-  let moves = [],title,type,strengthSets = 0;
+  let moves = [],title,type,strengthSets = 0,needsRunRecovery = false;
   const push = p.pushups === 'many' && !p.avoidFloor ? 'floor' : ['many','some'].includes(p.pushups) ? 'incline' : 'wall';
   if (['gym','bodyweight','pilates'].includes(mode)) {
     type = mode === 'pilates' ? 'mat' : 'strength';
@@ -151,6 +151,7 @@ export function makeSession(mode,p,day=0,short=false) {
     let detail = '편한 평지에서 문장으로 대화할 수 있는 속도로 걸어요. 숨이 많이 차면 속도를 낮춰요.';
     if (mode === 'running' && ['comfortable','running'].includes(p.walking) && (p.experience === 'regular' || [0,2,4].includes(day))) {
       title = '걷기와 가벼운 러닝';
+      needsRunRecovery = p.experience === 'new';
       const cycles = Math.floor(work/3),rest = work%3;
       detail = `걷기 2분 + 가벼운 달리기 1분을 ${cycles}번${rest ? `, 마지막 ${rest}분은 걷기` : ''}. 힘들면 달리기 구간도 걸어도 괜찮아요.`;
     } else if (mode === 'hiking' && ['comfortable','running'].includes(p.walking)) detail = '가까운 평지·완만한 경사 길을 골라요. 이 시간 안에 왕복하고 날씨·미끄럼·하산 시간을 먼저 확인하세요.';
@@ -158,7 +159,7 @@ export function makeSession(mode,p,day=0,short=false) {
     blocks.push({name:title,minutes:work,detail});
   }
   blocks.push({name:'마무리',minutes:cool,detail:'걸음을 늦추고 호흡을 가라앉혀요. 통증이 생기면 동작을 중단하세요.'});
-  return {day,mode,type,title,minutes,blocks,moves,strengthSets,balanceMinutes,short,note:'분량은 시작용 예시예요. 자세가 무너지기 전에 멈추고, 시간이 끝나면 남은 세트를 몰아서 하지 마세요.'};
+  return {day,mode,type,title,minutes,blocks,moves,strengthSets,balanceMinutes,needsRunRecovery,short,note:'분량은 시작용 예시예요. 자세가 무너지기 전에 멈추고, 시간이 끝나면 남은 세트를 몰아서 하지 마세요.'};
 }
 
 export function estimateTimeline({earlier,recent,weeks,target,height}) {

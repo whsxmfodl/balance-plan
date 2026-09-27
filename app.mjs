@@ -1,6 +1,7 @@
 import { makePlan, makeSession, dateKey, estimateTimeline } from './planner.mjs';
 import { mealOptions, assessMeal } from './meal.mjs';
 import { SOURCES, EXCLUSION_LABELS, RULES } from './catalog.mjs';
+import { checkSchedule, moveSession } from './schedule.mjs';
 import { STORAGE_KEY, packState, unpackState } from './storage.mjs';
 
 const $ = selector => document.querySelector(selector);
@@ -8,9 +9,15 @@ const form = $('#planner-form'), content = $('#result-content');
 const initialContent = content.innerHTML;
 const escape = value => String(value).replace(/[&<>"']/g,c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let plan = null, example = false, remember = false, context = 'home', variant = 0;
+let moves = {};
 let completed = new Set(), shortened = new Set(), startDate = dateKey(new Date()), lastSignature = '';
 const shortDate = key => new Date(`${key}T12:00:00`).toLocaleDateString('ko-KR',{month:'numeric',day:'numeric',weekday:'short'});
-const currentSessions = () => plan.sessions.map(s => shortened.has(s.date) ? {...makeSession(s.mode,plan.p,s.day,true),date:s.date} : s);
+const currentSessions = () => {
+  const checked=checkSchedule(plan.sessions,moves,startDate);
+  const sessions=checked.status==='ok'?checked.sessions:plan.sessions.map(s=>({...s,originalDate:s.date}));
+  return sessions.map(s=>({...s,...(shortened.has(s.date)?makeSession(s.mode,plan.p,s.day,true):{}),date:s.date,originalDate:s.originalDate,baseMinutes:s.minutes}));
+};
+const reveal = node => node.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'});
 
 $('#exclusions').innerHTML = Object.entries(EXCLUSION_LABELS).map(([value,label]) => `<label><input type="checkbox" name="exclusions" value="${value}">${label}</label>`).join('');
 $('#source-list').innerHTML = SOURCES.map(s => `<div class="source-item"><a href="${escape(s.url)}" target="_blank" rel="noopener noreferrer">${escape(s.title)}</a><p>${escape(s.detail)}</p></div>`).join('');
@@ -38,6 +45,7 @@ function syncOptions() {
   form.elements.namedItem('balance').disabled = !older;
 }
 function showError(result) {
+  $('#profile-editor').open=true;
   $('#form-error').textContent = result.message;
   $('#form-error').hidden = false;
   const target = form.querySelector(`[name="${result.field}"]`);
@@ -53,13 +61,15 @@ function build({scroll=true,keep=false}={}) {
   const next = makePlan(input(),new Date(`${startDate}T12:00:00`));
   if (next.status==='error') { showError(next); return; }
   const signature = next.status==='ok' ? JSON.stringify(next.p) : '';
-  if (!keep && signature!==lastSignature) { completed.clear(); shortened.clear(); startDate=dateKey(new Date()); }
+  if (!keep && signature!==lastSignature) { completed.clear(); shortened.clear(); moves={}; startDate=dateKey(new Date()); }
   plan = next.status==='ok' ? makePlan(next.p,new Date(`${startDate}T12:00:00`)) : next;
   if (plan.status==='caution') clearStoredForReview();
+  if (plan.status==='ok' && checkSchedule(plan.sessions,moves,startDate).status!=='ok') { moves={}; completed.clear(); shortened.clear(); }
   lastSignature = signature;
   render(); renderMeal(); $('#meal-feedback').textContent='';
   if (remember && !example && plan.status==='ok') persist();
-  if (scroll && window.innerWidth<=1000) { $('#result').scrollIntoView({behavior:'smooth',block:'start'}); $('#result-title').focus({preventScroll:true}); }
+  if (plan.status==='ok' && window.innerWidth<=1000) $('#profile-editor').open=false;
+  if (scroll) { reveal($('#result')); $('#result-title').focus({preventScroll:true}); }
 }
 
 function render() {
@@ -68,7 +78,7 @@ function render() {
     content.innerHTML=`<div class="panel caution"><h3>${escape(plan.title)}</h3><p>${escape(plan.message)}</p><ol>${plan.steps.map(s=>`<li>${escape(s)}</li>`).join('')}</ol></div>`;
     return;
   }
-  content.innerHTML = `<div id="workout-region"></div><div class="panel plan-card"><details class="fold"><summary>왜 이렇게 구성했나요?</summary><p>${escape(plan.budgetNote)}</p><ul class="reason-list">${plan.reasons.map(s=>`<li>${escape(s)}</li>`).join('')}</ul><p>유산소와 근력은 따로 살펴요. 모든 운동 시간을 더해 유산소 주 150분을 달성했다고 계산하지 않아요. 이 일정은 회복을 고려한 시작 예시이며 실제 가능한 요일로 옮길 때에도 근력·매트 운동 사이에 하루를 비워 주세요.</p></details><div class="goal-period"><h3>기간보다 먼저, 첫 2주를 정해요</h3><p>${escape(plan.timeline)}</p><p>${escape(plan.checkpoint)}</p>${plan.goalNotes.length ? `<div class="goal-tags">${plan.goalNotes.map(n=>`<span>${escape(n)}</span>`).join('')}</div>` : ''}<details class="fold"><summary>체중 변화 기록이 있다면 기간 참고하기</summary><p>비슷한 조건에서 잰 두 시점의 주간 평균이 필요해요. 하루 체중 두 개를 비교하지 마세요. 두 평균 시점은 2주 이상 떨어져 있어야 해요.</p>${plan.p.targetWeight===null ? '<p>먼저 입력 조건에 목표 체중을 적고 계획을 다시 만들어 주세요.</p>' : `<form id="trend-form" novalidate><div class="field-grid two"><label>이전 주간 평균 <span>kg</span><input type="number" name="earlier" min="25" max="300" step="0.1" inputmode="decimal" required></label><label>최근 주간 평균 <span>kg</span><input type="number" name="recent" min="25" max="300" step="0.1" inputmode="decimal" required></label><label>두 평균 시점 사이 <span>주</span><input type="number" name="weeks" min="2" max="26" step="0.1" placeholder="예: 4" inputmode="decimal" required></label></div><p>목표 체중 ${escape(plan.p.targetWeight)}kg 기준 · 추세 단순 연장</p><button class="outline-button" type="submit">기록으로 참고값 보기</button><div id="trend-feedback" role="status"></div></form>`}</details></div>${example ? '<p class="small-note">예시를 보고 있어요. 내 정보로 바꾼 뒤 계획을 만들어 주세요.</p>' : `<details class="save-box"><summary>다음에도 이어서 쓰고 싶다면</summary><p>저장하면 건강 입력값·완료 체크·10분 전환을 이 브라우저에 ${RULES.storageDays}일 보관해요. 사진은 제외돼요. 암호화된 보관함은 아니므로 공용기기에서는 저장하지 마세요.</p><div class="save-actions"><button type="button" id="save-plan" class="outline-button">이 기기에 기억하기</button><button type="button" id="forget-plan" class="text-button" ${remember ? '' : 'hidden'}>기기 저장 끄기</button></div><p id="save-message" role="status">${remember ? '기기 저장이 켜져 있어요. 완료 체크와 수정한 계획도 이 기기에만 반영돼요.' : '현재는 이 화면에서만 사용 중이에요.'}</p></details>`}</div>`;
+  content.innerHTML = `<div id="workout-region"></div><div class="panel plan-card"><details class="fold"><summary>왜 이렇게 구성했나요?</summary><p>${escape(plan.budgetNote)}</p><ul class="reason-list">${plan.reasons.map(s=>`<li>${escape(s)}</li>`).join('')}</ul><p>유산소와 근력은 따로 살펴요. 모든 운동 시간을 더해 유산소 주 150분을 달성했다고 계산하지 않아요. 이 일정은 회복을 고려한 시작 예시이며 실제 가능한 요일로 옮길 때에도 근력·매트 운동 사이에 하루를 비워 주세요.</p></details><div class="goal-period"><h3>기간보다 먼저, 첫 2주를 정해요</h3><p>${escape(plan.timeline)}</p><p>${escape(plan.checkpoint)}</p>${plan.goalNotes.length ? `<div class="goal-tags">${plan.goalNotes.map(n=>`<span>${escape(n)}</span>`).join('')}</div>` : ''}<details class="fold"><summary>체중 변화 기록이 있다면 기간 참고하기</summary><p>비슷한 조건에서 잰 두 시점의 주간 평균이 필요해요. 하루 체중 두 개를 비교하지 마세요. 두 평균 시점은 2주 이상 떨어져 있어야 해요.</p>${plan.p.targetWeight===null ? '<p>먼저 입력 조건에 목표 체중을 적고 계획을 다시 만들어 주세요.</p>' : `<form id="trend-form" novalidate><div class="field-grid two"><label>이전 주간 평균 <span>kg</span><input type="number" name="earlier" min="25" max="300" step="0.1" inputmode="decimal" required></label><label>최근 주간 평균 <span>kg</span><input type="number" name="recent" min="25" max="300" step="0.1" inputmode="decimal" required></label><label>두 평균 시점 사이 <span>주</span><input type="number" name="weeks" min="2" max="26" step="0.1" placeholder="예: 4" inputmode="decimal" required></label></div><p>목표 체중 ${escape(plan.p.targetWeight)}kg 기준 · 추세 단순 연장</p><button class="outline-button" type="submit">기록으로 참고값 보기</button><div id="trend-feedback" role="status"></div></form>`}</details></div>${example ? '<p class="small-note">예시를 보고 있어요. 내 정보로 바꾼 뒤 계획을 만들어 주세요.</p>' : `<details class="save-box"><summary>다음에도 이어서 쓰고 싶다면</summary><p>저장하면 건강 입력값·완료 체크·10분 전환·변경한 날짜를 이 브라우저에 ${RULES.storageDays}일 보관해요. 사진은 제외돼요. 암호화된 보관함은 아니므로 공용기기에서는 저장하지 마세요.</p><div class="save-actions"><button type="button" id="save-plan" class="outline-button">이 기기에 기억하기</button><button type="button" id="forget-plan" class="text-button" ${remember ? '' : 'hidden'}>기기 저장 끄기</button></div><p id="save-message" role="status">${remember ? '기기 저장이 켜져 있어요. 완료 체크와 수정한 계획도 이 기기에만 반영돼요.' : '현재는 이 화면에서만 사용 중이에요.'}</p></details>`}</div>`;
   renderWorkouts();
 }
 
@@ -79,10 +89,11 @@ function renderWorkouts() {
   const done = sessions.filter(s=>completed.has(s.date)).length;
   const next = sessions.find(s=>!completed.has(s.date) && s.date>=dateKey(new Date())) || sessions.find(s=>!completed.has(s.date));
   const total = sessions.reduce((n,s)=>n+s.minutes,0);
-  container.innerHTML = `<div class="start-card"><p class="eyebrow">${example ? '예시 · ' : ''}${done===sessions.length ? '이번 주 계획을 실천했어요' : '첫걸음은 구체적으로'}</p><h3>${next ? `${escape(next.title)}, 약 ${next.minutes}분` : '이번 주도 수고했어요.'}</h3><p>${next ? `${shortDate(next.date)}에 시작하는 예시예요. 날짜는 생활에 맞춰 옮겨도 괜찮아요.` : '더 채우기보다 회복하고, 다음 주에도 이어갈 수 있는지 컨디션을 살펴요.'}</p><div class="start-actions">${next ? `<button type="button" data-open="${next.day}">동작과 순서 보기 →</button>` : '<span>작은 실행이 쌓이고 있어요.</span>'}<span class="progress-text">${done} / ${sessions.length}회 완료 · 이번 주 계획 ${total}분</span></div></div><div class="panel plan-card"><div class="section-title"><h3>${escape(plan.title)}</h3><span>회복일 포함</span></div><p class="small-note">${escape(plan.ageNote)}</p><div class="week-strip">${Array.from({length:7},(_,i)=>{
-    const key=dateKey(new Date(`${startDate}T12:00:00`),i), s=sessions.find(s=>s.day===i), dayName=new Date(`${key}T12:00:00`).toLocaleDateString('ko-KR',{weekday:'short'});
-    return `<div class="week-day ${s ? 'active' : ''} ${completed.has(key) ? 'done' : ''}"><strong>${dayName} ${key.slice(-2)}</strong><small>${s ? completed.has(key) ? '완료 ✓' : s.type==='strength' ? '근력' : s.type==='mat' ? '매트' : s.type==='recovery' ? '회복 걷기' : '걷기·러닝' : '쉬는 날'}</small></div>`;
-  }).join('')}</div>${sessions.map((s,i)=>`<details class="workout" id="session-${s.day}" ${opened.includes(`session-${s.day}`) || (!opened.length && s===next) || (!opened.length && !next && i===0) ? 'open' : ''}><summary><span class="date-label">${shortDate(s.date)}</span><span>${escape(s.title)}</span><span class="minutes">${s.minutes}분</span></summary><div class="workout-body"><div class="workout-tools"><label class="complete-label"><input type="checkbox" data-complete="${s.date}" ${completed.has(s.date) ? 'checked' : ''}>${completed.has(s.date) ? '오늘도 해냈어요' : '실천했어요'}</label>${plan.sessions[i].minutes>10 ? `<button type="button" class="outline-button" data-short="${s.date}">${s.short ? '원래 분량으로' : '바쁜 날은 10분만'}</button>` : ''}</div><ol class="workout-steps">${s.blocks.map(b=>`<li><span class="duration">약 ${b.minutes}분</span><strong>${escape(b.name)}</strong><p>${escape(b.detail)}</p></li>`).join('')}</ol><p class="small-note">${escape(s.note)}</p></div></details>`).join('')}<p class="safety-note">날카로운 통증·흉통·심한 어지럼이나 평소와 다른 숨참이 있으면 운동을 중단하고 상태에 맞는 도움을 받으세요.</p>${!sessions.some(s=>s.type==='strength') ? '<p class="small-note">이번 조합에는 전신 근력 운동이 없어요. 가능하다면 주 2일 근력을 함께 챙겨요.</p><button type="button" class="outline-button" id="add-strength">맨몸운동도 포함해 다시 짜기</button>' : ''}</div>`;
+  const endDate=dateKey(new Date(startDate+'T12:00:00'),6),today=dateKey(new Date()),expired=today>endDate;
+  container.innerHTML = `<div class="start-card">${example ? '<span class="example-label">가상 입력으로 보는 예시</span>' : ''}<h3>${expired ? '새 한 주를 시작해 볼까요?' : next ? `${escape(next.title)}, 약 ${next.minutes}분` : '이번 주도 수고했어요.'}</h3><p>${expired ? '이 계획의 기간이 지났어요. 오늘부터 새 일정을 만들 수 있어요.' : next ? `${shortDate(next.date)} 일정이에요. 시간이 부족하면 10분으로 줄이고, 필요하면 날짜를 바꿔 보세요.` : '더 채우기보다 회복하고, 다음 주에도 이어갈 수 있는지 컨디션을 살펴요.'}</p><div class="start-actions">${expired ? '<button type="button" id="new-week">오늘부터 새 한 주</button>' : next ? `<button type="button" data-open="${next.day}">동작과 순서 보기</button>` : '<span>작은 실행이 쌓이고 있어요.</span>'}<span class="progress-text">${done} / ${sessions.length}회 완료<span class="progress-caption">이번 주 계획 ${total}분</span></span></div></div><div class="panel plan-card"><div class="section-title"><h3>${escape(plan.title)}</h3><span>${shortDate(startDate)} — ${shortDate(endDate)}</span></div><p class="small-note">${escape(plan.ageNote)}</p><div class="week-strip">${Array.from({length:7},(_,i)=>{
+    const key=dateKey(new Date(`${startDate}T12:00:00`),i), s=sessions.find(s=>s.date===key), dayName=new Date(`${key}T12:00:00`).toLocaleDateString('ko-KR',{weekday:'short'});
+    return `<${s?'button':'div'} ${s?`type="button" data-open="${s.day}" aria-label="${shortDate(key)} ${escape(s.title)} 보기"`:''} class="week-day ${s ? 'active' : ''} ${completed.has(key) ? 'done' : ''}"><small>${dayName}</small><strong>${key.slice(-2)}</strong><small>${s ? completed.has(key) ? '완료' : s.type==='strength' ? '근력' : s.type==='mat' ? '매트' : s.type==='recovery' ? '회복' : s.mode==='hiking' ? '걷기' : '유산소' : '휴식'}</small></${s?'button':'div'}>`;
+  }).join('')}</div>${sessions.map((s,i)=>`<details class="workout" id="session-${s.day}" ${opened.includes(`session-${s.day}`) || (!opened.length && s===next) || (!opened.length && !next && i===0) ? 'open' : ''}><summary><span class="date-label">${shortDate(s.date)}</span><span>${escape(s.title)}</span><span class="minutes">${s.minutes}분</span></summary><div class="workout-body"><div class="workout-tools"><label class="complete-label"><input type="checkbox" data-complete="${s.date}" ${completed.has(s.date) ? 'checked' : ''}>${completed.has(s.date) ? '오늘도 해냈어요' : '실천했어요'}</label>${s.baseMinutes>10 ? `<button type="button" class="outline-button" data-short="${s.date}">${s.short ? '원래 분량으로' : '바쁜 날은 10분만'}</button>` : ''}</div>${!completed.has(s.date)&&!expired?`<details class="reschedule"><summary>운동 날짜 바꾸기</summary><form data-reschedule="${s.originalDate}"><label>이번 주 안에서 이동<input type="date" name="sessionDate" value="${s.date}" min="${startDate>today?startDate:today}" max="${endDate}" required></label><button type="submit" class="outline-button">날짜 변경</button><p role="alert" class="schedule-error"></p></form></details>`:'<p class="small-note">완료했거나 기간이 지난 운동 날짜는 유지해요.</p>'}<ol class="workout-steps">${s.blocks.map(b=>`<li><span class="duration">약 ${b.minutes}분</span><strong>${escape(b.name)}</strong><p>${escape(b.detail)}</p></li>`).join('')}</ol><p class="small-note">${escape(s.note)}</p></div></details>`).join('')}<p class="safety-note">날카로운 통증·흉통·심한 어지럼이나 평소와 다른 숨참이 있으면 운동을 중단하고 상태에 맞는 도움을 받으세요.</p>${!sessions.some(s=>s.type==='strength') ? '<p class="small-note">이번 조합에는 전신 근력 운동이 없어요. 가능하다면 주 2일 근력을 함께 챙겨요.</p><button type="button" class="outline-button" id="add-strength">맨몸운동도 포함해 다시 짜기</button>' : ''}</div>`;
 }
 
 form.addEventListener('submit',e=>{e.preventDefault();example=false;build();});
@@ -94,15 +105,16 @@ form.addEventListener('input',()=>{
   renderMeal(); $('#meal-feedback').textContent='';
 });
 $('#example').addEventListener('click',()=>{
-  example=true; completed.clear(); shortened.clear(); startDate=dateKey(new Date());
+  example=true; completed.clear(); shortened.clear(); moves={}; startDate=dateKey(new Date());
   fill({goal:'habit',age:30,height:170,weight:75,targetWeight:null,days:3,minutes:30,budget:0,experience:'new',modes:['bodyweight','running'],walking:'comfortable',pushups:'unknown',diet:'mixed',exclusions:[],risk:false,hasGym:false});
   build();
 });
 content.addEventListener('click',e=>{
   const target=e.target.closest('button');
   if (!target || plan?.status!=='ok') return;
-  if (target.dataset.open!==undefined) { const card=$(`#session-${target.dataset.open}`); card.open=true; card.scrollIntoView({behavior:'smooth',block:'start'}); return; }
+  if (target.dataset.open!==undefined) { const card=$(`#session-${target.dataset.open}`); card.open=true; reveal(card); card.querySelector('summary').focus({preventScroll:true}); return; }
   if (target.dataset.short) { const key=target.dataset.short; shortened.has(key) ? shortened.delete(key) : shortened.add(key); completed.delete(key); renderWorkouts(); persistIfEnabled(); $(`[data-short="${key}"]`)?.focus(); return; }
+  if (target.id==='new-week') { startDate=dateKey(new Date());completed.clear();shortened.clear();moves={};build({scroll:false,keep:true});return; }
   if (target.id==='add-strength') { form.querySelector('[name="modes"][value="bodyweight"]').checked=true; build({scroll:false}); return; }
   if (target.id==='save-plan') { remember=true; persist(); $('#forget-plan').hidden=!remember; return; }
   if (target.id==='forget-plan') {
@@ -117,6 +129,20 @@ content.addEventListener('change',e=>{
   renderWorkouts(); persistIfEnabled(); $(`[data-complete="${key}"]`)?.focus();
 });
 content.addEventListener('submit',e=>{
+  if (e.target.matches('[data-reschedule]')) {
+    e.preventDefault();
+    const original=e.target.dataset.reschedule;
+    const oldDate=moves[original]||original;
+    const result=moveSession(plan.sessions,moves,startDate,original,new FormData(e.target).get('sessionDate'));
+    if(result.status!=='ok'){e.target.querySelector('.schedule-error').textContent=result.message;return;}
+    const changed=result.moves[original]||original;
+    if(shortened.delete(oldDate))shortened.add(changed);
+    moves=result.moves; renderWorkouts(); persistIfEnabled();
+    $('#result-tag').textContent=shortDate(changed)+'로 날짜를 바꿨어요';
+    const session=plan.sessions.find(s=>s.date===original);
+    $(`#session-${session.day} > summary`)?.focus();
+    return;
+  }
   if (e.target.id!=='trend-form') return;
   e.preventDefault();
   const result=estimateTimeline({...Object.fromEntries(new FormData(e.target)),target:plan.p.targetWeight,height:plan.p.height});
@@ -137,7 +163,7 @@ function clearStoredForReview() {
 }
 function persist() {
   if (example || plan?.status!=='ok') return;
-  try { localStorage.setItem(STORAGE_KEY,packState(plan.p,completed,startDate,Date.now(),shortened)); if ($('#save-message')) $('#save-message').textContent='이 브라우저에 30일 동안 기억할게요. 다른 기기와 공유되지 않으며 사진은 저장하지 않아요.'; }
+  try { localStorage.setItem(STORAGE_KEY,packState(plan.p,completed,startDate,Date.now(),shortened,moves)); if ($('#save-message')) $('#save-message').textContent='이 브라우저에 30일 동안 기억할게요. 다른 기기와 공유되지 않으며 사진은 저장하지 않아요.'; }
   catch { remember=false; if ($('#save-message')) $('#save-message').textContent='브라우저에 저장하지 못했어요. 현재 화면은 계속 사용할 수 있어요.'; }
 }
 function persistIfEnabled() { if (remember && !example) persist(); }
@@ -180,7 +206,8 @@ window.addEventListener('pagehide',()=>clearPhoto());
 $('#clear-all').addEventListener('click',()=>{
   let removed=true;
   try { localStorage.removeItem(STORAGE_KEY); } catch { removed=false; }
-  remember=false; plan=null; example=false; completed.clear(); shortened.clear(); lastSignature='';startDate=dateKey(new Date());
+  remember=false; plan=null; example=false; completed.clear(); shortened.clear(); moves={}; lastSignature='';startDate=dateKey(new Date());
+  $('#profile-editor').open=true;
   form.reset(); form.querySelectorAll('[aria-invalid]').forEach(e=>e.removeAttribute('aria-invalid')); $('#meal-form').reset(); clearPhoto(); syncOptions(); variant=0;
   content.innerHTML=initialContent; $('#result-tag').textContent='준비 중'; $('#form-error').hidden=true; $('#restore-message').hidden=true; $('#meal-feedback').textContent=''; renderMeal();
   $('#clear-message').textContent=removed ? '입력·사진·기기 저장 정보를 모두 지웠어요.' : '현재 입력과 사진은 지웠지만 저장소 삭제는 확인하지 못했어요. 브라우저의 사이트 데이터 설정에서 삭제해 주세요.';
@@ -195,9 +222,11 @@ try {
       const age=(new Date(`${dateKey(new Date())}T12:00:00`)-new Date(`${state.startDate}T12:00:00`))/86400000;
       startDate=age>=0 && age<7 ? state.startDate : dateKey(new Date());
       completed=new Set(age>=0 && age<7 ? state.completed : []); shortened=new Set(age>=0 && age<7 ? state.shortened : []);
+      moves=age>=0&&age<7?state.moves:{};
       lastSignature=JSON.stringify(state.profile); build({scroll:false,keep:true});
       $('#restore-message').textContent=age>=7 ? '기억해 둔 조건으로 새 한 주를 준비했어요. 컨디션이 달라졌다면 입력을 수정해 주세요.' : '이 기기에 기억해 둔 계획을 불러왔어요. 이어서 시작해 보세요.'; $('#restore-message').hidden=false;
     } else { localStorage.removeItem(STORAGE_KEY); $('#restore-message').textContent='기기 저장 정보가 만료됐거나 읽을 수 없어 지웠어요. 새로 시작할 수 있어요.'; $('#restore-message').hidden=false; }
   }
 } catch { /* Storage is optional; the core planner works without it. */ }
+document.querySelectorAll('[href="#planner-form"]').forEach(link=>link.addEventListener('click',()=>{ $('#profile-editor').open=true; }));
 syncOptions(); renderMeal();
