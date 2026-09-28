@@ -12,6 +12,7 @@ export const SOURCES = [
   { title:'NIDDK · 안전한 체중 관리 계획', url:'https://www.niddk.nih.gov/health-information/weight-management/choosing-a-safe-successful-weight-loss-program', detail:'지속할 수 있는 식사 선택, 활동, 장벽을 다루는 구체적 실천과 경과 확인을 권고합니다. 이 사이트의 하루 메뉴는 개인 영양 처방이나 효과가 검증된 치료 프로그램은 아닙니다.' },
   { title:'NIDDK · 음식 분량 이해하기', url:'https://www.niddk.nih.gov/health-information/weight-management/just-enough-food-portions', detail:'메뉴와 포장 식품의 제공량을 살피는 방법을 참고했습니다. 개인의 적정 분량·열량을 계산한 것은 아닙니다.' },
   { title:'NIDDK · 체중 계획', url:'https://www.niddk.nih.gov/health-information/weight-management/body-weight-planner', detail:'개인별 체중 계획에는 식사와 활동량이 함께 필요합니다. 이 사이트는 해당 예측 모델을 구현하지 않았습니다.' },
+  { title:'보건복지부·한국영양학회 · 식사구성안', url:'https://kns.or.kr/fileroom/fileroom_view.asp?BoardID=Kdr&idx=125', detail:'2020 한국인 영양소 섭취기준 활용연구의 식품군별 1회 기준량과 하루 열량별 B형 패턴. 밥 210g은 곡류 1회 기준이며 개인별 한 끼 처방량이 아닙니다.' },
   { title:'푸시업 연구 · 적용 범위', url:'https://pubmed.ncbi.nlm.nih.gov/30363033/', detail:'대학생 남성 31명의 상대 근력 관련 연구. 체성분 추정이나 이 사이트의 난이도 구간을 검증한 연구는 아닙니다.' },
   { title:'사진 체성분 연구 · 한계', url:'https://pubmed.ncbi.nlm.nih.gov/31334579/', detail:'특정 2D·3D 도구의 오차 연구이며 모든 최신 도구를 대표하지 않습니다. 이 사이트에는 신체 사진 측정 모델이 없습니다.' }
 ];

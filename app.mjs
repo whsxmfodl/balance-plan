@@ -5,6 +5,7 @@ import { checkSchedule, moveSession } from './schedule.mjs';
 import { STORAGE_KEY, packState, unpackState } from './storage.mjs';
 import { reviewWeek } from './review.mjs';
 import { searchFoodPage, estimatePortion, sumPortions } from './food-search.mjs';
+import { portionPattern } from './portion-guide.mjs';
 
 const $ = selector => document.querySelector(selector);
 const form = $('#planner-form'), content = $('#result-content');
@@ -186,6 +187,18 @@ function persist() {
 function persistIfEnabled() { if (remember && !example) persist(); }
 
 function mealProfile() { return plan?.status==='ok' ? plan.p : input(); }
+function renderPortionGuide() {
+  const target=$('#portion-guide-result');
+  const profile=mealProfile();
+  if (!form.elements.namedItem('riskAnswer').value) { target.textContent='내 조건의 건강 확인 항목을 먼저 골라 주세요.'; return; }
+  if (profile.risk || plan?.status==='caution') { target.textContent='건강상 확인이 필요한 경우에는 일반 식사구성안을 적용하지 않고 기존 의료진·영양 전문가의 안내를 우선해 주세요.'; return; }
+  if (profile.diet==='plant' || profile.exclusions?.includes('dairy')) { target.textContent='이 식사구성안은 유제품을 포함합니다. 식물성 식단 또는 유제품 제한이 있다면 이 표를 그대로 적용할 수 없어 전문가와 대체 식품을 확인해 주세요.'; return; }
+  const pattern=portionPattern($('#portion-energy').value);
+  if (!pattern) { target.textContent='공식 도구나 전문가에게 확인한 하루 열량에 맞는 유형을 고르면 식품군별 하루 양이 표시돼요.'; return; }
+  const excluded=new Set(profile.exclusions||[]);
+  const proteinExamples=[!excluded.has('meat')?'닭고기 생것 60g':null,!excluded.has('soy')?'두부 80g':null,!excluded.has('egg')?'달걀 60g':null,!excluded.has('fish')?'생선 생것 70g':null].filter(Boolean);
+  target.innerHTML=`<p><strong>${pattern.energy.toLocaleString('ko-KR')}kcal 식사구성안 B형의 하루 분량</strong></p><ul><li>곡류 ${pattern.grain}회 · 밥만 먹는 경우의 환산량 ${pattern.riceEquivalent}g(210g 공기 ${pattern.grain}개). 빵·면·감자를 먹는 날에는 그만큼 다른 곡류로 바꿔 계산해요.</li><li>고기·생선·달걀·콩류 ${pattern.protein}회${proteinExamples.length?` · 예: ${proteinExamples.join(', ')}이 각각 1회 기준량`:''}</li><li>채소류 ${pattern.vegetable}회 · 예: 생채소 70g이 1회 기준량. 김치·버섯 등은 기준량이 달라요.</li><li>과일류 ${pattern.fruit}회 · 예: 사과 100g이 1회 기준량</li><li>우유·유제품류 ${pattern.dairy}회 · 예: 우유 200mL가 1회 기준량</li></ul><p class="small-note">하루 전체의 식품군 배분표입니다. 한 끼마다 이 양을 먹으라는 뜻이 아니며, 조리 기름·양념·음료까지 포함한 개인 처방도 아닙니다. 1회 기준량은 개인의 적정 섭취량과 다릅니다.</p>`;
+}
 function todayMealSettings() { return {morning:$('#meal-morning').value,midday:$('#meal-midday').value,evening:$('#meal-evening').value,habit:$('#meal-habit').value}; }
 function renderDayMeal(profile) {
   const target=$('#day-meal-plan');
@@ -326,11 +339,13 @@ foodMealItems.addEventListener('click', event => {
 function renderMeal() {
   const profile=mealProfile();
   renderDayMeal(profile);
+  renderPortionGuide();
   if (!form.elements.namedItem('riskAnswer').value) { $('#meal-suggestion').innerHTML='<p>먼저 내 조건의 ‘운동·식사 조절 전 확인’을 골라 주세요.</p>'; return; }
   if (profile.risk || plan?.status==='caution') { $('#meal-suggestion').innerHTML='<p>건강상 확인이 필요한 경우에는 일반 식사 예시를 적용하기 전에 이미 안내받은 식사 계획을 우선해 주세요.</p>'; return; }
   const meal=mealOptions(profile,context,variant);
   $('#meal-suggestion').innerHTML=`<h3>${escape(meal.title)}</h3><p>${escape(meal.focus)}</p><ul class="food-parts">${meal.parts.map(p=>`<li>${escape(p)}</li>`).join('')}</ul>${meal.canSwap ? '<button type="button" id="swap-food" class="outline-button">다른 단백질 식품으로 바꾸기</button>' : ''}<p>${escape(meal.tip)}</p><details class="fold"><summary>피할 식품과 분량 안내</summary><p>${escape(meal.caution)}</p><p>구성 예시이며 개인별 열량·영양소 처방이 아니에요. 매 끼니 이 메뉴를 맞출 필요는 없어요.</p></details>`;
 }
+$('#portion-energy').addEventListener('change',renderPortionGuide);
 document.querySelectorAll('#meal-morning,#meal-midday,#meal-evening,#meal-habit').forEach(select=>select.addEventListener('change',()=>{renderDayMeal(mealProfile()); $('#meal-feedback').textContent='';}));
 document.querySelectorAll('[data-context]').forEach(button=>button.addEventListener('click',()=>{
   context=button.dataset.context; variant=0;
@@ -372,6 +387,7 @@ $('#clear-all').addEventListener('click',()=>{
   $('#profile-editor').open=true;
   form.reset(); form.querySelectorAll('[aria-invalid]').forEach(e=>e.removeAttribute('aria-invalid')); $('#meal-form').reset(); clearPhoto(); syncOptions(); variant=0;
   $('#meal-morning').value='home'; $('#meal-midday').value='out'; $('#meal-evening').value='home'; $('#meal-habit').value='balance';
+  $('#portion-energy').value='';
   foodQuery.value=''; foodKind.value='general'; clearFoodMeal(); resetFoodSearch();
   content.innerHTML=initialContent; $('#result-tag').textContent='준비 중'; $('#form-error').hidden=true; $('#restore-message').hidden=true; $('#meal-feedback').textContent=''; renderMeal();
   $('#clear-message').textContent=removed ? '입력·사진·기기 저장 정보를 모두 지웠어요.' : '현재 입력과 사진은 지웠지만 저장소 삭제는 확인하지 못했어요. 브라우저의 사이트 데이터 설정에서 삭제해 주세요.';
