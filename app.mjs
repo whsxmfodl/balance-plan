@@ -1,4 +1,4 @@
-import { makePlan, makeSession, dateKey, estimateTimeline } from './planner.mjs';
+import { makePlan, makeSession, dateKey, estimateTimeline } from './planner.mjs?v=20260928-7';
 import { mealOptions, assessMeal, dayMealPlan } from './meal.mjs';
 import { SOURCES, EXCLUSION_LABELS, RULES } from './catalog.mjs';
 import { checkSchedule, moveSession } from './schedule.mjs';

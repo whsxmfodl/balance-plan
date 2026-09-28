@@ -1,0 +1,71 @@
+{
+  "kind": "synthetic software QA; no actual users or clinical outcomes",
+  "seed": 20260928,
+  "counts": {
+    "total": 50000,
+    "ok": 14244,
+    "caution": 33213,
+    "error": 2543,
+    "older": 20883,
+    "highRisk": 3091,
+    "optionalBodyUnknown": 6617,
+    "sexParityChecked": 147,
+    "mealChecks": 14244,
+    "foodChecks": 1000
+  },
+  "statusByGoal": {
+    "muscle": {
+      "ok": 2975,
+      "caution": 8730,
+      "error": 721
+    },
+    "recompose": {
+      "ok": 4665,
+      "caution": 7219,
+      "error": 536
+    },
+    "habit": {
+      "ok": 3010,
+      "caution": 9011,
+      "error": 610
+    },
+    "loss": {
+      "ok": 3594,
+      "caution": 8253,
+      "error": 676
+    }
+  },
+  "statusByAge": {
+    "18–64": {
+      "ok": 12699,
+      "caution": 14920,
+      "error": 1498
+    },
+    "65–100": {
+      "ok": 1545,
+      "caution": 18293,
+      "error": 1045
+    }
+  },
+  "issues": {},
+  "examples": {},
+  "boundaries": {
+    "pilatesOnlyMuscle": {
+      "status": "ok",
+      "modes": [
+        "pilates",
+        "recovery",
+        "bodyweight",
+        "recovery"
+      ]
+    },
+    "impossibleMuscleTarget": {
+      "status": "error",
+      "field": "targetMuscle"
+    },
+    "longTrend": {
+      "status": "caution",
+      "title": "장기 목표의 도착 주수는 표시하지 않아요"
+    }
+  }
+}

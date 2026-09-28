@@ -29,6 +29,7 @@ export function validateProfile(raw) {
   if (!p.modes.length) return error('modes','하고 싶은 운동을 하나 이상 골라 주세요.');
   if (p.goal === 'loss' && p.targetWeight !== null && p.targetWeight >= p.weight) return error('targetWeight','체중 줄이기라면 현재 체중보다 작은 목표를 적거나 비워 두세요.');
   if (p.goal === 'recompose' && p.targetWeight !== null && Math.abs(p.targetWeight-p.weight) > 0.5) return error('targetWeight','체중 유지·체형 개선을 선택했어요. 목표 체중을 비우거나 현재 체중에 맞춰 주세요. 체중도 바꾸려면 목표를 바꿔 주세요.');
+  if (p.targetWeight === null && p.targetMuscle !== null && p.targetMuscle >= p.weight) return error('targetMuscle','목표 골격근량이 현재 체중 이상이에요. 체중도 늘릴 계획이라면 목표 체중을 함께 입력하고 수치를 확인해 주세요.');
   for (const [w,f,m] of [['weight','fat','muscle'],['targetWeight','targetFat','targetMuscle']]) {
     const mass = p[w] ?? (w === 'targetWeight' && p.goal === 'recompose' ? p.weight : null);
     if (mass !== null && p[m] !== null && p[m] >= mass) return error(m,'골격근량은 체중보다 작아야 해요. 단위가 kg인지 확인해 주세요.');
@@ -82,7 +83,7 @@ export function makePlan(raw,startDate = new Date()) {
   const sessions = active.map(day => {
     let mode;
     if (loadDays.includes(day)) {
-      const candidates = strengthPriority ? loading.filter(m => m !== 'pilates') : loading;
+      const candidates = loading;
       mode = candidates[loadIndex++ % candidates.length];
     } else mode = cardio.length ? cardio[cardioIndex++ % cardio.length] : 'recovery';
     return {...makeSession(mode,p,day),date:dateKey(startDate,day)};
@@ -94,7 +95,7 @@ export function makePlan(raw,startDate = new Date()) {
   if (p.days === 1 && strengthPriority) reasons.push('이번 주에는 가능한 1회부터 시작해요. 근력 주 2일 권고에는 아직 못 미치므로 여건이 생기면 짧은 1회를 더해요.');
   if (p.avoidFloor) reasons.push('바닥 동작을 피하는 조건을 반영했어요. 의자·벽 등 안정적인 지지물을 준비해 주세요.');
   if (older) reasons.push(`활동일 ${p.days}일에 균형 연습 2분씩을 기존 시간 안에 넣었어요. ${p.days < 3 ? '가능한 횟수가 3일보다 적어 WHO의 주 3일 복합 활동 권고에는 못 미쳐요. ' : ''}시작용 연습이며 권고 강도·분량을 모두 충족했다고 평가하지 않아요.`);
-  const ageNote = older ? `${p.age}세: 근력·걷기·균형을 함께 다뤄요. 운동량 상한은 나이만으로 낮추지 않고 최근 운동 경험과 가능한 시간에 맞췄어요.` : `${p.age}세: 성인 활동 지침을 적용해요. 20대·40대·60대라는 이유만으로 같은 능력의 사람에게 다른 횟수를 처방하지 않고, 운동 경험·걷기·푸시업 수행과 건강 상태를 반영해요.`;
+  const ageNote = older ? `${p.age}세: 근력·걷기·균형을 함께 다뤄요. 운동량 상한은 나이만으로 낮추지 않고 최근 운동 경험과 가능한 시간에 맞췄어요.` : `${p.age}세: 운동 경험, 가능한 시간과 걷기 상태를 바탕으로 시작 분량을 정했어요.`;
   const goalNotes = [];
   if (p.targetWeight !== null) goalNotes.push(`체중 ${p.weight} → ${p.targetWeight}kg`);
   if (p.targetFat !== null) goalNotes.push(p.fat === null ? `목표 체지방률 ${p.targetFat}% · 현재값 확인 후 비교` : `체지방률 ${p.fat} → ${p.targetFat}%`);
@@ -171,5 +172,7 @@ export function estimateTimeline({earlier,recent,weeks,target,height}) {
   const rate = (b-a)/w;
   if (Math.abs(rate)<0.1 || Math.sign(rate)!==Math.sign(t-b)) return {status:'caution',title:'지금 추세로는 기간을 계산하기 어려워요',detail:'변화가 작거나 목표와 방향이 달라요. 식사를 급하게 줄이지 말고 측정 조건과 실제 생활 변화를 살펴보세요.'};
   if (Math.abs(rate)>Math.min(1,a*0.01)) return {status:'caution',title:'변화 원인을 먼저 확인해 주세요',detail:'체수분·측정 차이가 섞였을 수 있어 빠른 변화 속도를 그대로 연장하지 않아요. 의도하지 않은 변화나 불편한 증상이 있으면 의료진과 확인하세요.'};
-  return {status:'ok',title:`같은 추세가 이어진다면 약 ${Math.ceil(Math.abs((t-b)/rate))}주`,detail:`입력한 평균은 주당 ${Math.abs(rate).toFixed(2)}kg ${rate<0 ? '감소' : '증가'}했어요. 남은 체중 차이를 이 속도로 나눈 조건부 계산이며, 이 운동 계획의 효과 예측은 아닙니다. 정체기·체수분·생활 변화에 따라 달라지고 체지방·근육의 달성 시점은 알 수 없어요.`};
+  const projectedWeeks = Math.ceil(Math.abs((t-b)/rate));
+  if (projectedWeeks > 52) return {status:'caution',title:'장기 목표의 도착 주수는 표시하지 않아요',detail:'현재 두 시점의 평균을 단순 연장하면 1년을 넘어요. 그동안 같은 속도가 유지된다고 보기 어려워 주 단위 숫자는 제시하지 않습니다. 생활에 맞는 중간 목표와 추세를 다시 점검해 주세요. 52주 제한은 이 서비스의 표시 정책이며 의학적 경계가 아니에요.'};
+  return {status:'ok',title:`같은 추세가 이어진다면 약 ${projectedWeeks}주`,detail:`입력한 평균은 주당 ${Math.abs(rate).toFixed(2)}kg ${rate<0 ? '감소' : '증가'}했어요. 남은 체중 차이를 이 속도로 나눈 조건부 계산이며, 이 운동 계획의 효과 예측은 아닙니다. 정체기·체수분·생활 변화에 따라 달라지고 체지방·근육의 달성 시점은 알 수 없어요.`};
 }
