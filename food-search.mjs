@@ -30,3 +30,15 @@ export function estimatePortion(food, amount) {
     values: food.slice(3, 8).map(value => value === null ? null : value * factor)
   };
 }
+
+// Null propagates: a missing nutrient in one item cannot become a complete meal total.
+export function sumPortions(entries) {
+  if (!Array.isArray(entries) || entries.length < 1 || entries.length > 5) return null;
+  const portions = entries.map(({food, amount}) => estimatePortion(food, amount));
+  if (portions.some(portion => !portion)) return null;
+  return Array.from({length:5}, (_, index) =>
+    portions.some(portion => portion.values[index] === null)
+      ? null
+      : portions.reduce((sum, portion) => sum + portion.values[index], 0)
+  );
+}

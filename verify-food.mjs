@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { FOOD_META, FOODS } from './dist/food-data.mjs';
-import { searchFoods, searchFoodPage, estimatePortion } from './dist/food-search.mjs';
+import { searchFoods, searchFoodPage, estimatePortion, sumPortions } from './dist/food-search.mjs';
 
 assert.equal(FOODS.length, FOOD_META.included);
 assert.ok(FOODS.length > 19000);
@@ -29,4 +29,9 @@ const sample = ['test', '샘플', '100g', 100, 10, null, 2, 100, '출처', '', '
 assert.deepEqual(estimatePortion(sample, 250), {unit:'g', amount:250, values:[250,25,null,5,250]});
 assert.deepEqual(estimatePortion([...sample.slice(0,2),'100ml',...sample.slice(3)], 50), {unit:'ml', amount:50, values:[50,5,null,1,50]});
 for (const amount of ['', 0, -1, 2001, 'abc']) assert.equal(estimatePortion(sample, amount), null);
+const second = ['test-2', '두 번째', '100ml', 200, 8, 4, 1, null, '출처', '', '방법'];
+assert.deepEqual(sumPortions([{food:sample,amount:150},{food:second,amount:50}]), [250,19,null,3.5,null]);
+assert.equal(sumPortions([]), null);
+assert.equal(sumPortions([{food:sample,amount:0}]), null);
+assert.equal(sumPortions(Array.from({length:6},()=>({food:sample,amount:100}))), null);
 console.log(`공식 음식 ${FOODS.length.toLocaleString()}건: 구조·검색·기준량·결측값 확인`);

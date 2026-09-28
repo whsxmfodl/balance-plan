@@ -4,7 +4,7 @@ import { SOURCES, EXCLUSION_LABELS, RULES } from './catalog.mjs';
 import { checkSchedule, moveSession } from './schedule.mjs';
 import { STORAGE_KEY, packState, unpackState } from './storage.mjs';
 import { reviewWeek } from './review.mjs';
-import { searchFoodPage, estimatePortion } from './food-search.mjs';
+import { searchFoodPage, estimatePortion, sumPortions } from './food-search.mjs';
 
 const $ = selector => document.querySelector(selector);
 const form = $('#planner-form'), content = $('#result-content');
@@ -67,7 +67,7 @@ function build({scroll=true,keep=false}={}) {
   const signature = next.status==='ok' ? JSON.stringify(next.p) : '';
   if (!keep && signature!==lastSignature) { completed.clear(); shortened.clear(); moves={}; startDate=dateKey(new Date()); }
   plan = next.status==='ok' ? makePlan(next.p,new Date(`${startDate}T12:00:00`)) : next;
-  if (plan.status==='caution') clearStoredForReview();
+  if (plan.status==='caution') { clearStoredForReview(); clearFoodMeal(); }
   if (plan.status==='ok' && checkSchedule(plan.sessions,moves,startDate).status!=='ok') { moves={}; completed.clear(); shortened.clear(); }
   lastSignature = signature;
   render(); renderMeal(); renderFoodPortion(); $('#meal-feedback').textContent='';
@@ -108,6 +108,7 @@ form.addEventListener('input',()=>{
   syncOptions(); $('#form-error').hidden=true;
   const latest=input();
   if (latest.risk || (Number(latest.age)>=65 && (latest.balance!=='clear' || !['comfortable','running'].includes(latest.walking)))) clearStoredForReview();
+  if (form.elements.namedItem('riskAnswer').value !== 'no') clearFoodMeal();
   if (plan) { plan=null; example=false; $('#result-tag').textContent='조건 수정 중'; content.innerHTML='<div class="panel dirty"><h3>조건이 바뀌었어요.</h3><p>입력을 마치고 ‘내 한 주 만들기’를 누르면 바뀐 조건을 반영할게요.</p></div>'; }
   renderMeal(); renderFoodPortion(); $('#meal-feedback').textContent='';
 });
@@ -212,34 +213,54 @@ const foodMore = $('#food-more');
 const foodPortion = $('#food-portion');
 const foodAmount = $('#food-amount');
 const foodEstimate = $('#food-estimate');
+const foodAdd = $('#food-add');
+const foodMeal = $('#food-meal');
+const foodMealItems = $('#food-meal-items');
+const foodMealTotal = $('#food-meal-total');
 let foodLoad;
 let foodVisible = 12;
 let selectedFood = null;
+let foodMealEntries = [];
 function formatFoodValue(value, unit) {
   if (value === null) return '자료 없음';
   if (value > 0 && value < 0.01) return `0.01${unit} 미만`;
   return `${new Intl.NumberFormat('ko-KR', {maximumFractionDigits: 2}).format(value)}${unit}`;
 }
 function renderFoodPortion() {
-  if (!selectedFood) { foodPortion.hidden = true; foodEstimate.replaceChildren(); return; }
+  if (!selectedFood) { foodPortion.hidden = true; foodEstimate.replaceChildren(); foodAdd.disabled = true; return; }
   foodPortion.hidden = false;
   $('#food-selected').textContent = `${selectedFood[1]} · ${selectedFood[9] || selectedFood[8]} · ${selectedFood[2]} 기준`;
   $('#food-unit').textContent = selectedFood[2] === '100ml' ? 'ml' : 'g';
   const risk = form.elements.namedItem('riskAnswer').value;
   foodAmount.disabled = risk !== 'no' || plan?.status === 'caution';
+  foodAdd.disabled = foodAmount.disabled;
   if (foodAmount.disabled) {
     foodAmount.value = '';
+    clearFoodMeal();
     foodEstimate.textContent = risk === 'yes' || plan?.status === 'caution'
       ? '건강상 확인이 필요하다면 개인 식사 조절은 담당 전문가와 상의해 주세요. 위 기준량 정보는 일반 자료예요.'
       : '양을 환산하려면 먼저 ‘내 조건’에서 운동·식사 조절 전 확인 항목을 골라 주세요.';
     return;
   }
-  if (!foodAmount.value) { foodEstimate.textContent = '실제로 먹은 양을 알 때만 입력해 주세요. 모르면 위 기준량 정보만 참고할 수 있어요.'; return; }
+  if (!foodAmount.value) { foodAdd.disabled = true; foodEstimate.textContent = '실제로 먹은 양을 알 때만 입력해 주세요. 모르면 위 기준량 정보만 참고할 수 있어요.'; return; }
   const result = estimatePortion(selectedFood, foodAmount.value);
-  if (!result) { foodEstimate.textContent = '1~2,000 사이의 양을 입력해 주세요.'; return; }
+  if (!result) { foodAdd.disabled = true; foodEstimate.textContent = '1~2,000 사이의 양을 입력해 주세요.'; return; }
+  foodAdd.disabled = foodMealEntries.length >= 5;
   const [kcal, carb, protein, fat, sodium] = result.values;
   foodEstimate.innerHTML = `<strong>입력한 ${formatFoodValue(result.amount, result.unit)}의 참고 영양값</strong><p>열량 ${formatFoodValue(kcal, 'kcal')} · 탄수화물 ${formatFoodValue(carb, 'g')} · 단백질 ${formatFoodValue(protein, 'g')} · 지방 ${formatFoodValue(fat, 'g')} · 나트륨 ${formatFoodValue(sodium, 'mg')}</p><small>공개 자료의 기준값을 입력한 양에 비례해 환산했어요. 실제 음식·조리법·양이 다르면 값도 달라져요. 하루 전체 섭취량이나 목표 지연을 뜻하지 않아요.</small>`;
 }
+function renderFoodMeal() {
+  foodMeal.hidden = foodMealEntries.length === 0;
+  if (foodMeal.hidden) { foodMealItems.replaceChildren(); foodMealTotal.replaceChildren(); return; }
+  foodMealItems.innerHTML = foodMealEntries.map(({food,amount},index) => {
+    const unit = food[2] === '100ml' ? 'ml' : 'g';
+    return `<li><span><strong>${escape(food[1])}</strong><small>${escape(food[9] || food[8])} · ${formatFoodValue(amount, unit)}</small></span><button type="button" class="text-button" data-remove-food="${index}" aria-label="${escape(food[1])} ${index+1}번째 항목 빼기">빼기</button></li>`;
+  }).join('');
+  const values = sumPortions(foodMealEntries);
+  const [kcal,carb,protein,fat,sodium] = values;
+  foodMealTotal.innerHTML = `<strong>입력한 ${foodMealEntries.length}개 항목만의 참고 합계</strong><p>열량 ${formatFoodValue(kcal,'kcal')} · 탄수화물 ${formatFoodValue(carb,'g')} · 단백질 ${formatFoodValue(protein,'g')} · 지방 ${formatFoodValue(fat,'g')} · 나트륨 ${formatFoodValue(sodium,'mg')}</p><small>한 항목이라도 자료가 없으면 해당 영양소의 합계를 표시하지 않아요. 빠진 음식·소스·조리법과 실제 양에 따라 값이 달라져요. 하루 목표나 체중 변화 평가가 아니에요.</small>`;
+}
+function clearFoodMeal() { foodMealEntries = []; renderFoodMeal(); }
 function renderFoodResults() {
   if (!foodRows) return;
   const query = foodQuery.value.trim();
@@ -285,6 +306,23 @@ foodResults.addEventListener('click', event => {
   if (selectedFood) { foodPortion.scrollIntoView({behavior:'auto', block:'nearest'}); foodAmount.disabled ? foodPortion.focus() : foodAmount.focus({preventScroll:true}); }
 });
 foodAmount.addEventListener('input', renderFoodPortion);
+foodAdd.addEventListener('click', () => {
+  if (!selectedFood || foodAdd.disabled || foodMealEntries.length >= 5) return;
+  const amount = Number(foodAmount.value);
+  if (!estimatePortion(selectedFood, amount)) return;
+  foodMealEntries.push({food:selectedFood, amount});
+  renderFoodMeal(); renderFoodPortion();
+  foodMeal.scrollIntoView({behavior:'auto',block:'nearest'});
+});
+$('#food-another').addEventListener('click', () => {
+  foodQuery.focus(); foodQuery.select(); foodQuery.scrollIntoView({behavior:'auto',block:'center'});
+});
+foodMealItems.addEventListener('click', event => {
+  const button = event.target.closest('[data-remove-food]');
+  if (!button) return;
+  foodMealEntries.splice(Number(button.dataset.removeFood),1);
+  renderFoodMeal(); renderFoodPortion();
+});
 function renderMeal() {
   const profile=mealProfile();
   renderDayMeal(profile);
@@ -334,7 +372,7 @@ $('#clear-all').addEventListener('click',()=>{
   $('#profile-editor').open=true;
   form.reset(); form.querySelectorAll('[aria-invalid]').forEach(e=>e.removeAttribute('aria-invalid')); $('#meal-form').reset(); clearPhoto(); syncOptions(); variant=0;
   $('#meal-morning').value='home'; $('#meal-midday').value='out'; $('#meal-evening').value='home'; $('#meal-habit').value='balance';
-  foodQuery.value=''; foodKind.value='general'; resetFoodSearch();
+  foodQuery.value=''; foodKind.value='general'; clearFoodMeal(); resetFoodSearch();
   content.innerHTML=initialContent; $('#result-tag').textContent='준비 중'; $('#form-error').hidden=true; $('#restore-message').hidden=true; $('#meal-feedback').textContent=''; renderMeal();
   $('#clear-message').textContent=removed ? '입력·사진·기기 저장 정보를 모두 지웠어요.' : '현재 입력과 사진은 지웠지만 저장소 삭제는 확인하지 못했어요. 브라우저의 사이트 데이터 설정에서 삭제해 주세요.';
 });

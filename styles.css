@@ -281,6 +281,22 @@ select { padding-right:24px }
 #food-estimate strong { display:block; color:var(--ink) }
 #food-estimate p { margin:6px 0 }
 #food-estimate small { display:block; color:var(--muted); font-size:12px }
+#food-add { margin-top:14px; min-height:44px }
+#food-add:disabled { background:var(--line); color:var(--ink); cursor:not-allowed }
+.food-portion>.small-note { margin:10px 0 0; font-size:12px }
+.food-meal { margin:20px 0; padding:20px 0; border-top:1px solid var(--line); border-bottom:1px solid var(--line) }
+.food-meal h4 { margin:0 0 13px; font-size:17px }
+#food-another { margin:0 0 8px; min-height:40px }
+#food-meal-items { list-style:none; padding:0; margin:0 0 16px }
+#food-meal-items li { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:9px 0; border-bottom:1px solid var(--line) }
+#food-meal-items li strong,#food-meal-items li small { display:block; overflow-wrap:anywhere }
+#food-meal-items li strong { font-size:14px }
+#food-meal-items li small { color:var(--muted); font-size:12px }
+#food-meal-items li button { flex-shrink:0; min-height:40px }
+#food-meal-total { font-size:14px; line-height:1.55 }
+#food-meal-total strong { display:block; color:var(--ink) }
+#food-meal-total p { margin:5px 0 }
+#food-meal-total small { display:block; color:var(--muted); font-size:12px }
 #meal-feedback p { font-size:13px; color:var(--muted) }
 .about { margin-top:42px; border-top:1px solid var(--line) }
 .about>details { padding:20px 0; border-bottom:1px solid var(--line) }
