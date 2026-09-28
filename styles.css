@@ -269,6 +269,18 @@ select { padding-right:24px }
 .food-result>strong { display:block; color:var(--blue); font-size:14px }
 .food-result>small { display:block; color:var(--muted); font-size:12px; margin-top:4px }
 .food-result>p { margin:7px 0 0; font-size:13px; line-height:1.5 }
+.food-result button { margin-top:12px; min-height:40px }
+.food-more { margin:14px 0 0; min-height:44px }
+.food-portion { margin:20px 0; padding:18px; background:var(--soft); border-radius:10px; outline:none }
+.food-portion:focus-visible { outline:3px solid var(--blue); outline-offset:2px }
+.food-portion h4 { margin:0 0 6px; font-size:17px }
+.food-portion>p { margin:0 0 16px }
+.food-portion label { display:block; margin-bottom:7px; font-weight:600; font-size:14px }
+.food-portion input { max-width:220px; width:100% }
+#food-estimate { margin-top:13px; line-height:1.55; font-size:14px }
+#food-estimate strong { display:block; color:var(--ink) }
+#food-estimate p { margin:6px 0 }
+#food-estimate small { display:block; color:var(--muted); font-size:12px }
 #meal-feedback p { font-size:13px; color:var(--muted) }
 .about { margin-top:42px; border-top:1px solid var(--line) }
 .about>details { padding:20px 0; border-bottom:1px solid var(--line) }
