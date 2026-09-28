@@ -228,6 +228,9 @@ select { padding-right:24px }
 #portion-guide-result strong { font-size:16px }
 #portion-guide-result ul { margin:12px 0; padding-left:20px }
 #portion-guide-result li { margin:7px 0 }
+.grain-exchanges { margin:16px 0; padding:14px 16px; border:1px solid var(--line); border-radius:8px; background:#fff }
+.grain-exchanges summary { cursor:pointer; font-weight:650 }
+.grain-exchanges p { font-size:13px; color:var(--muted) }
 .portion-guide-source { margin-top:14px }
 .shopping-list { margin-top:22px; border-top:1px solid var(--line); padding-top:16px }
 .shopping-list>summary { font-weight:700; cursor:pointer; font-size:15px }

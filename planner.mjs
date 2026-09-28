@@ -4,20 +4,21 @@ const required = {age:[18,100,'나이'],height:[100,230,'키'],weight:[25,300,'�
 const optional = {targetWeight:[25,300,'목표 체중'],fat:[3,70,'현재 체지방률'],muscle:[1,100,'현재 골격근량'],targetFat:[3,70,'목표 체지방률'],targetMuscle:[1,100,'목표 골격근량'],facilityCost:[0,500,'확인한 월 헬스장 요금']};
 const blank = value => value === undefined || value === null || String(value).trim() === '';
 const error = (field,message) => ({status:'error',field,message});
+const vowelEnding = name => ['age','height','days'].includes(name);
 
 export function validateProfile(raw) {
   if (!raw || typeof raw !== 'object') return error('age','내 정보를 먼저 입력해 주세요.');
   const p = {};
   for (const [name,[min,max,label]] of Object.entries({...required,...optional})) {
     if (blank(raw[name])) {
-      if (name in required) return error(name,`${label}을 입력해 주세요.${name === 'budget' ? ' 추가 지출이 없으면 0을 입력하세요.' : ''}`);
+      if (name in required) return error(name,`${label}${vowelEnding(name)?'를':'을'} 입력해 주세요.${name === 'budget' ? ' 추가 지출이 없으면 0을 입력하세요.' : ''}`);
       p[name] = null;
       continue;
     }
     p[name] = Number(raw[name]);
-    if (!Number.isFinite(p[name]) || p[name] < min || p[name] > max) return error(name,`${label}은 ${min}~${max} 범위로 입력해 주세요.`);
+    if (!Number.isFinite(p[name]) || p[name] < min || p[name] > max) return error(name,`${label}${vowelEnding(name)?'는':'은'} ${min}~${max} 범위로 입력해 주세요.`);
   }
-  for (const key of ['age','days','minutes']) if (!Number.isInteger(p[key])) return error(key,`${required[key][2]}은 정수로 입력해 주세요.`);
+  for (const key of ['age','days','minutes']) if (!Number.isInteger(p[key])) return error(key,`${required[key][2]}${vowelEnding(key)?'는':'은'} 정수로 입력해 주세요.`);
   p.goal = raw.goal || 'habit'; p.experience = raw.experience || 'new'; p.pushups = raw.pushups || 'unknown'; p.walking = raw.walking || 'unknown'; p.diet = raw.diet || 'mixed';
   if (!Object.hasOwn(GOAL_LABELS,p.goal) || !['new','regular'].includes(p.experience) || !['unknown','none','few','some','many'].includes(p.pushups) || !['unknown','hard','comfortable','running'].includes(p.walking) || !['mixed','plant'].includes(p.diet)) return error('goal','선택 항목을 다시 확인해 주세요.');
   p.modes = [...new Set((Array.isArray(raw.modes) ? raw.modes : []).filter(m => Object.hasOwn(MODE_LABELS,m)))];
