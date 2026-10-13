@@ -1,4 +1,4 @@
-# 밸런스 플랜
+# .
 
 [공개 사이트](https://whsxmfodl.github.io/balance-plan/) · [소스 저장소](https://github.com/whsxmfodl/balance-plan)
 
